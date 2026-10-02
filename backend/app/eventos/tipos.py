@@ -1,14 +1,26 @@
 """Tipos de evento del sistema.
 
 Concepto de simulación: **evento**, un suceso instantáneo que cambia el estado del sistema.
-En la etapa E1 sólo existe la degeneración del generador; los eventos de las hormigas
-(salir del nido, colisión, encontrar alimento, …) se agregan en la etapa E2.
+Los códigos numéricos se guardan en la columna `ultimo_evento` (uint8) de `Hormigas`.
 """
 
-from enum import Enum
+from enum import IntEnum
 
 
-class TipoEvento(str, Enum):
-    """Catálogo de eventos que se registran en la bitácora."""
+class TipoEvento(IntEnum):
+    """Catálogo de eventos que se registran en la bitácora (DISENO.md §7)."""
 
-    GENERADOR_DEGENERADO = "GENERADOR_DEGENERADO"
+    NINGUNO = 0
+    SALIDA_NIDO = 1
+    COLISION_PREVISTA = 2
+    COLISION_BORDE = 3
+    FIN_EVASION = 4
+    ENTRADA_RADIO_REINA = 5
+    FIN_SEGUIMIENTO = 6
+    ENCONTRAR_ALIMENTO = 7
+    FUENTE_AGOTADA = 8
+    ENERGIA_BAJA = 9
+    LLEGADA_NIDO = 10
+    DEPOSITO_ALIMENTO = 11
+    CAMBIO_RUMBO_REINA = 12
+    GENERADOR_DEGENERADO = 13

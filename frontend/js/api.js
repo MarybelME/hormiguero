@@ -17,11 +17,20 @@ function describirError(estado, datos) {
   if (datos && Array.isArray(datos.detail)) {
     return datos.detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ");
   }
+  if (datos && typeof datos.detail === "string") return datos.detail;
   return `Error ${estado} del servidor`;
 }
 
 export function obtenerSalud() {
   return pedir("/api/salud");
+}
+
+// Crea una simulación nueva con los parámetros dados (los demás toman su valor por defecto).
+export function configurarSimulacion(parametros) {
+  return pedir("/api/simulacion/configurar", {
+    method: "POST",
+    body: JSON.stringify(parametros),
+  });
 }
 
 export function vistaPreviaAleatorios({ semilla, digitos, cantidad }) {

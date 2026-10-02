@@ -67,6 +67,11 @@ class ServicioAleatorio:
     def total_generados(self) -> int:
         return self.registro.total
 
+    @property
+    def ultimo_indice(self) -> int:
+        """Índice global del último número entregado (0 si todavía no hay ninguno)."""
+        return self.registro.total
+
     def degeneraciones(self, flujo: Flujo) -> int:
         """Veces que degeneró (y se re-sembró) el generador de ese flujo."""
         return self._degeneraciones[flujo]

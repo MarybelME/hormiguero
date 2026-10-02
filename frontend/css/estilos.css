@@ -12,6 +12,13 @@
   --resaltado: #c2410c;
   --ok: #15803d;
   --error: #b91c1c;
+  /* Colores del mundo (render.js los lee de aquí) */
+  --mundo-nido: #8b5a2b;
+  --mundo-reina: #7c3aed;
+  --mundo-patrulla: #a78bfa;
+  --mundo-roca: #6b7280;
+  --mundo-fuente: #16a34a;
+  --mundo-texto: #1d2330;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +36,12 @@
     --resaltado: #fb923c;
     --ok: #4ade80;
     --error: #f87171;
+    --mundo-nido: #c08a52;
+    --mundo-reina: #a78bfa;
+    --mundo-patrulla: #8b7fd1;
+    --mundo-roca: #9ca3af;
+    --mundo-fuente: #4ade80;
+    --mundo-texto: #e6e9ef;
   }
 }
 
@@ -78,8 +91,9 @@ body {
 .contenedor-canvas {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  max-height: 60vh;
+  max-width: calc(70vh * 10 / 7);
+  aspect-ratio: 10 / 7;
+  margin: 0 auto;
   background: var(--fondo-mundo);
   border-radius: 6px;
   overflow: hidden;
@@ -92,14 +106,31 @@ body {
   height: 100%;
 }
 
-.aviso-canvas {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 0;
+.leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  list-style: none;
+  font-size: 0.85rem;
   color: var(--texto-suave);
 }
+
+.leyenda li { display: flex; align-items: center; gap: 0.4rem; }
+
+.muestra {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+}
+
+.muestra.nido { background: var(--mundo-nido); }
+.muestra.reina { background: var(--mundo-reina); }
+.muestra.patrulla { border: 2px dashed var(--mundo-patrulla); }
+.muestra.roca { background: var(--mundo-roca); }
+.muestra.fuente { background: var(--mundo-fuente); }
 
 .explicacion { color: var(--texto-suave); margin-top: 0; }
 

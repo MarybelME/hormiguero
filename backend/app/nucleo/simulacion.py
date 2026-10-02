@@ -1,0 +1,125 @@
+"""Simulación del hormiguero.
+
+Concepto de simulación: **sistema** y **avance del tiempo**. Es un modelo de tiempo
+discreto: cada llamada a `paso()` avanza el reloj `dt` segundos simulados. Dentro de cada
+paso ocurren eventos (salir del nido, chocar, encontrar alimento…) que se anotan en la
+bitácora con su tiempo, su hormiga y el número pseudoaleatorio que usaron. No es un
+simulador de eventos discretos puro: los eventos se detectan dentro de los pasos.
+
+Reproducibilidad: las fases se ejecutan siempre en el mismo orden y, dentro de cada fase,
+las hormigas con evento se atienden en orden ascendente de id. Misma semilla y mismos
+parámetros ⇒ misma simulación.
+"""
+
+from typing import Any
+
+from app import config
+from app.aleatorio.cuadrados_medios import GeneradorCuadradosMedios
+from app.aleatorio.registro import CAPACIDAD_REGISTRO, RegistroAleatorio
+from app.aleatorio.servicio import Flujo, ServicioAleatorio
+from app.comportamiento.buscando import detectar_alimento
+from app.comportamiento.en_nido import salidas_del_nido
+from app.comportamiento.energia import actualizar_energia
+from app.comportamiento.evitando import terminar_evasiones
+from app.comportamiento.movimiento import aplicar_movimiento, proponer_movimiento
+from app.comportamiento.regresando import detectar_llegada_nido
+from app.comportamiento.reina import mover_reina
+from app.comportamiento.siguiendo_reina import (
+    detectar_radio_reina,
+    orientar_hacia_reina,
+    terminar_seguimientos,
+)
+from app.comportamiento.transportando import orientar_al_nido
+from app.config import ParametrosSimulacion
+from app.espacial.colisiones import resolver_colisiones
+from app.estadisticas.contadores import Estadisticas
+from app.eventos.bitacora import CAPACIDAD_BITACORA, Bitacora
+from app.modelo.generacion_mundo import generar_mundo
+from app.modelo.mundo import Mundo
+from app.nucleo.contexto import ContextoPaso
+
+
+class Simulacion:
+    """Una corrida completa: mundo, generadores, bitácora, contadores y reloj."""
+
+    def __init__(
+        self,
+        parametros: ParametrosSimulacion,
+        capacidad_registro: int = CAPACIDAD_REGISTRO,
+        capacidad_bitacora: int = CAPACIDAD_BITACORA,
+    ) -> None:
+        self.parametros = parametros
+        self.dt = config.DT
+        self._capacidad_registro = capacidad_registro
+        self._capacidad_bitacora = capacidad_bitacora
+        self._construir()
+
+    def _construir(self) -> None:
+        p = self.parametros
+        self.bitacora = Bitacora(self._capacidad_bitacora)
+        self.aleatorio = ServicioAleatorio(
+            GeneradorCuadradosMedios(p.semilla, p.digitos),
+            GeneradorCuadradosMedios(p.semilla_comportamiento, p.digitos),
+            registro=RegistroAleatorio(self._capacidad_registro),
+            bitacora=self.bitacora,
+        )
+        self.estadisticas = Estadisticas()
+        self.tick = 0
+        self.mundo: Mundo = generar_mundo(p, self.aleatorio)
+        self.estadisticas.actualizar_conteo(self.mundo.hormigas.estado)
+
+    @property
+    def tiempo(self) -> float:
+        """Tiempo de simulación en segundos simulados."""
+        return round(self.tick * self.dt, 10)
+
+    def reiniciar(self) -> None:
+        """Vuelve a t = 0 con los mismos parámetros: la corrida se repite idéntica."""
+        self._construir()
+
+    def paso(self) -> None:
+        """Avanza el reloj un paso `dt` ejecutando las fases en orden fijo (DISENO.md §10.3)."""
+        self.tick += 1
+        self.aleatorio.fijar_tiempo(self.tick, self.tiempo)
+        ctx = ContextoPaso(
+            tick=self.tick, tiempo=self.tiempo, dt=self.dt, mundo=self.mundo,
+            parametros=self.parametros, aleatorio=self.aleatorio,
+            bitacora=self.bitacora, estadisticas=self.estadisticas,
+        )
+        mover_reina(ctx)                                        # 1
+        salidas_del_nido(ctx)                                   # 2
+        actualizar_energia(ctx)                                 # 3
+        orientar_al_nido(ctx)                                   # 4 rumbos
+        orientar_hacia_reina(ctx)
+        moviles, x_nueva, y_nueva = proponer_movimiento(ctx)    # 5
+        bloqueadas = resolver_colisiones(ctx, moviles, x_nueva, y_nueva)  # 6
+        aplicar_movimiento(ctx, moviles & ~bloqueadas, x_nueva, y_nueva)  # 7
+        detectar_alimento(ctx)                                  # 8 eventos espaciales
+        detectar_llegada_nido(ctx)
+        detectar_radio_reina(ctx)
+        terminar_evasiones(ctx)                                 # 9 cuentas regresivas
+        terminar_seguimientos(ctx)
+        self.estadisticas.actualizar_conteo(self.mundo.hormigas.estado)  # 10
+
+    def avanzar(self, pasos: int) -> None:
+        for _ in range(pasos):
+            self.paso()
+
+    def alimento_total(self) -> int:
+        """Fuentes + transportado + depositado (debe ser constante: conservación del recurso)."""
+        en_fuentes = sum(f.cantidad for f in self.mundo.fuentes)
+        transportado = int(self.mundo.hormigas.carga.sum(dtype="int64"))
+        return en_fuentes + transportado + self.mundo.nido.alimento_almacenado
+
+    def resumen(self) -> dict[str, Any]:
+        """Estado global para la interfaz y los scripts."""
+        datos = self.estadisticas.como_dict()
+        datos.update(
+            tick=self.tick,
+            tiempo=self.tiempo,
+            total_hormigas=self.mundo.hormigas.n,
+            numeros_generados=self.aleatorio.total_generados,
+            resiembras={flujo.value: self.aleatorio.degeneraciones(flujo) for flujo in Flujo},
+            alimento_en_nido=self.mundo.nido.alimento_almacenado,
+        )
+        return datos

@@ -55,6 +55,13 @@ class RegistroAleatorio:
         self._entradas.append(entrada)
         self._total += 1
 
+    def buscar(self, indice: int) -> EntradaRegistro | None:
+        """La entrada con ese índice global, o None si ya salió del búfer (o no existe)."""
+        primero = self.primer_indice_disponible
+        if not primero <= indice <= self._total:
+            return None
+        return self._entradas[indice - primero]
+
     def pagina(self, desde: int, limite: int) -> list[EntradaRegistro]:
         """Entradas con índice ≥ `desde` que sigan en memoria; como máximo `limite`."""
         if limite <= 0:

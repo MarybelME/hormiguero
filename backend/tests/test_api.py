@@ -61,3 +61,37 @@ def test_vista_previa_marca_degeneracion_y_resiembra() -> None:
 )
 def test_vista_previa_rechaza_parametros_invalidos(cuerpo: dict) -> None:
     assert cliente.post("/api/aleatorio/vista-previa", json=cuerpo).status_code == 422
+
+
+def test_parametros_por_defecto_y_esquema() -> None:
+    datos = cliente.get("/api/parametros").json()
+    assert datos["valores"]["num_hormigas"] == 2000
+    assert datos["esquema"]["properties"]["p_seguir_reina"]["maximum"] == 1.0
+
+
+def test_configurar_y_consultar_mundo() -> None:
+    respuesta = cliente.post("/api/simulacion/configurar", json={"semilla": 5735})
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["semillas"] == {"MUNDO": 5735, "COMPORTAMIENTO": 735}
+    assert len(datos["mundo"]["obstaculos"]) == 12 and len(datos["mundo"]["fuentes"]) == 4
+    assert cliente.get("/api/mundo").json() == datos
+
+
+def test_misma_semilla_mismo_mundo_por_la_api() -> None:
+    a = cliente.post("/api/simulacion/configurar", json={"semilla": 4321}).json()
+    b = cliente.post("/api/simulacion/configurar", json={"semilla": 4321}).json()
+    assert a == b
+
+
+@pytest.mark.parametrize(
+    "cuerpo",
+    [
+        {"num_hormigas": 0},
+        {"semilla": 10_000},
+        {"p_seguir_reina": 2},
+        {"num_obstaculos": 60, "num_fuentes": 20, "radio_patrulla": 300},  # no cabe
+    ],
+)
+def test_configurar_rechaza_parametros_invalidos(cuerpo: dict) -> None:
+    assert cliente.post("/api/simulacion/configurar", json=cuerpo).status_code == 422

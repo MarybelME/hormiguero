@@ -4,12 +4,13 @@ La capa web sólo traduce peticiones HTTP a llamadas del núcleo y valida la ent
 Pydantic; no contiene lógica de simulación.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
 from app import __version__
+from app.config import ParametrosSimulacion
 from app.aleatorio.cuadrados_medios import (
     DIGITOS_POR_DEFECTO,
     PASO_RESIEMBRA,
@@ -19,6 +20,8 @@ from app.aleatorio.cuadrados_medios import (
     validar_configuracion,
 )
 from app.aleatorio.variables import angulo
+from app.modelo.generacion_mundo import ErrorGeneracionMundo
+from app.nucleo.simulacion import Simulacion
 
 CANTIDAD_POR_DEFECTO = 20
 CANTIDAD_MAXIMA_VISTA_PREVIA = 1000  # filas que la tabla didáctica puede mostrar a la vez
@@ -117,3 +120,47 @@ def vista_previa(solicitud: SolicitudVistaPrevia) -> RespuestaVistaPrevia:
         filas=filas,
         resiembras=generador.resiembras,
     )
+
+
+# --- Simulación (E2: configurar y consultar el mundo; el control en vivo llega en E3) ---------
+
+
+def _simulacion_actual(request: Request) -> Simulacion:
+    simulacion = getattr(request.app.state, "simulacion", None)
+    if simulacion is None:
+        raise HTTPException(status_code=404, detail="Todavía no hay un mundo configurado")
+    return simulacion
+
+
+def _respuesta_mundo(simulacion: Simulacion) -> dict[str, Any]:
+    p = simulacion.parametros
+    return {
+        "mundo": simulacion.mundo.capa_estatica(),
+        "semillas": {"MUNDO": p.semilla, "COMPORTAMIENTO": p.semilla_comportamiento},
+    }
+
+
+@router.get("/parametros")
+def parametros() -> dict[str, Any]:
+    """Valores por defecto y esquema (descripción, unidad y rango) de cada parámetro."""
+    return {
+        "valores": ParametrosSimulacion().model_dump(),
+        "esquema": ParametrosSimulacion.model_json_schema(),
+    }
+
+
+@router.post("/simulacion/configurar")
+def configurar(parametros: ParametrosSimulacion, request: Request) -> dict[str, Any]:
+    """Crea una simulación nueva (genera el mundo con la semilla) y devuelve la capa estática."""
+    try:
+        simulacion = Simulacion(parametros)
+    except ErrorGeneracionMundo as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    request.app.state.simulacion = simulacion
+    return _respuesta_mundo(simulacion)
+
+
+@router.get("/mundo")
+def mundo(request: Request) -> dict[str, Any]:
+    """Capa estática del mundo actual: dimensiones, nido, reina, rocas y fuentes."""
+    return _respuesta_mundo(_simulacion_actual(request))

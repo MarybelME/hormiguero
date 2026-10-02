@@ -119,7 +119,7 @@ para el modelo. Tocar la frontera es un evento **[DA-f]**.
 | Número de hormigas | `num_hormigas` | entidades | 1 – 20 000 | 2 000 |
 | Semilla | `semilla` | entero de `D` dígitos | 1 – 10^D − 1 | 5735 |
 | Generador | `generador` | nombre | `cuadrados_medios` (luego más) | `cuadrados_medios` |
-| Dígitos del generador | `digitos` | dígitos (par) | 2 – 10 | 4 |
+| Dígitos del generador | `digitos` | dígitos | 4, 6 u 8 **[DA-a]** | 4 |
 | Velocidad de simulación | `pasos_por_segundo` | pasos/s reales | 1 – 1 000 | 30 |
 | Número de rocas | `num_obstaculos` | rocas | 0 – 60 | 12 |
 | Número de fuentes | `num_fuentes` **[DA-g]** | fuentes | 1 – 20 | 4 |
@@ -561,7 +561,8 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 │   │   ├── modelo/         mundo.py, hormigas.py, reina.py, nido.py, alimento.py,
 │   │   │                   obstaculos.py, estados.py, generacion_mundo.py
 │   │   ├── comportamiento/ en_nido.py, buscando.py, siguiendo_reina.py, evitando.py,
-│   │   │                   transportando.py, regresando.py, reina.py, transiciones.py
+│   │   │                   transportando.py, regresando.py, reina.py, transiciones.py,
+│   │   │                   energia.py, movimiento.py
 │   │   ├── espacial/       rejilla.py, colisiones.py
 │   │   ├── aleatorio/      base.py, cuadrados_medios.py, congruencial.py, servicio.py,
 │   │   │                   registro.py, variables.py, pruebas_estadisticas.py
@@ -874,6 +875,8 @@ recomendación (**R**); abajo se conservan las opciones consideradas como regist
 | h | Reina | Patrulla aleatoria lenta alrededor del nido |
 | i | Salida del nido | Tasa constante `salidas_por_paso` |
 | j | Pruebas de la API | `httpx` en `requirements.txt` |
+| k | Semilla del flujo `COMPORTAMIENTO` (E2) | `(semilla + 10^D/2) mod 10^D`; si da 0, se usa 1 |
+| l | Reina y rocas (E2) | Zona de patrulla libre de rocas y fuentes; si la reina va a salir de ella, gira hacia el nido sin consumir `u` |
 
 ### a) Política ante la degeneración de cuadrados medios
 
@@ -1003,3 +1006,22 @@ El `TestClient` de FastAPI necesita `httpx`, que no está en la lista de depende
 3. Levantar `uvicorn` en un subproceso y probar con `urllib`.
 
 **R: opción 1.**
+
+### k) Semilla del flujo `COMPORTAMIENTO` (resuelta al iniciar E2)
+
+1. **Media escala**: `semilla_comportamiento = (semilla + 10^D/2) mod 10^D` (1 si da 0).
+   Ej.: 5735 → 0735. Una sola semilla en la interfaz; la regla cabe en una línea.
+2. Dígitos invertidos (5735 → 5375). Las capicúas dan dos flujos idénticos.
+3. Parámetro aparte `semilla_comportamiento`. Un campo más en el formulario.
+
+**Elegida: opción 1.**
+
+### l) La reina y las rocas (resuelta al iniciar E2)
+
+1. **Zona libre**: la generación del mundo no coloca rocas ni fuentes dentro de
+   `radio_patrulla` del nido; si la posición siguiente de la reina sale de esa zona, la reina
+   gira hacia el nido (determinista, sin consumir `u`).
+2. La reina choca como una obrera y cambia de rumbo con un nuevo `u`.
+3. La reina ignora las rocas.
+
+**Elegida: opción 1.**

@@ -3,8 +3,8 @@
 | Etapa | Estado |
 |---|---|
 | E0 Análisis y diseño | Terminada |
-| E1 Base y generadores | Terminada (pendiente de revisión) |
-| E2 Modelo y motor | Pendiente |
+| E1 Base y generadores | Terminada |
+| E2 Modelo y motor | Terminada (pendiente de revisión) |
 | E3 Tiempo real, interfaz y modo didáctico | Pendiente |
 | E4 Experimentación, feromonas y pulido | Pendiente |
 
@@ -93,3 +93,79 @@ Requisitos cubiertos: RF-10 a RF-15 y RNF-04.
    longitud 4) y aparece la re-siembra con semilla 3654.
 4. Probar semillas 1 (cero), 2500 (ciclo 1) y 6100 (ciclo 4); probar semilla 0 → mensaje de error.
 5. `pytest backend/tests -q` → 64 pruebas pasan.
+
+Commit: `f32b55f feat: etapa 1 — esqueleto web y generador de cuadrados medios con registro y degeneración`.
+
+---
+
+## E2 — Modelo y motor (2026-10-02)
+
+Requisitos cubiertos: RF-01 a RF-05, RF-20 a RF-25 y RNF-01.
+
+**Qué se hizo**
+- *Hito 2.1 — Mundo*:
+  - `config.py`: `ParametrosSimulacion` con descripción, unidad y rango de los 24 parámetros
+    (principales y avanzados) y constantes fijas (`DT`, mundo 1000 × 700, radios, celda 4).
+  - `modelo/`: `estados.py` (enums y tabla de transiciones), `hormigas.py` (15 columnas
+    NumPy y `vista(id)`), `nido.py`, `reina.py`, `alimento.py`, `obstaculos.py`, `mundo.py`
+    (`campos = {}` reservado para feromonas) y `generacion_mundo.py` (aceptación-rechazo con
+    el flujo `MUNDO`; cuenta candidatos, rechazados y números usados).
+  - `espacial/rejilla.py`: mapas de rocas y alimento.
+  - `nucleo/contexto.py`: `ContextoPaso`, con acceso a `campos`.
+  - API: `GET /api/parametros`, `POST /api/simulacion/configurar`, `GET /api/mundo`.
+  - Frontend: formulario "Generar mundo" (semilla, D, rocas, fuentes), `render.js` con la
+    capa estática (zona de patrulla, nido, reina y radio, rocas, fuentes con su cantidad) y leyenda.
+- *Hito 2.2 — Motor*:
+  - `nucleo/simulacion.py`: `Simulacion.paso()` con las fases de §10.3 en orden fijo,
+    `reiniciar()`, `alimento_total()`, `resumen()`.
+  - `comportamiento/`: una regla por estado, más `energia.py`, `movimiento.py`, `reina.py`
+    y `transiciones.py` (valida cada cambio de estado contra la tabla).
+  - `espacial/colisiones.py`: rocas y borde, nuevo `u · 360°`, estado `EVITANDO_OBSTACULO`.
+  - `eventos/tipos.py` (14 tipos, códigos uint8), `eventos/prediccion.py`.
+  - `estadisticas/contadores.py`: contadores que incrementan los eventos y conteo por estado.
+  - `scripts/benchmark.py`.
+- Pruebas: 172 en total (108 nuevas). Todas pasan en ~15 s.
+
+**Benchmark** (esta máquina, calentamiento con `salidas_por_paso = 100`):
+
+| Hormigas | Fuera del nido | Pasos/s | ms/paso |
+|---|---|---|---|
+| 1 000 | 879 | 2 318 | 0.43 |
+| 5 000 | 4 537 | 689 | 1.45 |
+| 20 000 | 19 376 | 212 | 4.73 |
+
+La meta (5 000 hormigas a ≥ 30 pasos/s) se supera con margen; el envío al navegador (E3)
+será el cuello de botella, no el núcleo.
+
+**Decisiones tomadas**
+- k) Semilla de `COMPORTAMIENTO` = `(semilla + 10^D/2) mod 10^D` (1 si da 0). Ej.: 5735 → 735.
+- l) Zona de patrulla de la reina libre de rocas y fuentes; la reina gira hacia el nido si
+  va a salir de ella (sin consumir `u`).
+- Detalles aprobados con el plan: al salir, la hormiga aparece en el borde del nido; al
+  llegar queda en el centro; con energía 0 va a mitad de velocidad
+  (`factor_velocidad_agotada`); `ENERGIA_BAJA` sólo en `BUSCANDO` y `SIGUIENDO`;
+  `distancia_minima_reina = 10`; la reina cambia de rumbo cada 50 pasos.
+- `TipoEvento` pasó de `str` a `IntEnum` para guardarlo en la columna `ultimo_evento` (uint8).
+- Un "cambio de dirección" es una dirección asignada por un evento (colisión, borde, fin de
+  seguimiento, alimento, energía baja); no cuenta la dirección de salida ni la corrección
+  continua del rumbo.
+- La rejilla marca una celda si el círculo la toca (margen = media diagonal): garantiza que
+  ninguna hormiga quede dentro de una roca.
+- `Simulacion` acepta capacidades de registro y bitácora (las pruebas usan búferes grandes);
+  `RegistroAleatorio.buscar(indice)` devuelve `None` si el número ya salió del búfer.
+- Se agregaron `comportamiento/energia.py` y `comportamiento/movimiento.py` (DISENO.md §11).
+
+**Pendientes / para E3**
+- Las rutas de control (iniciar, pausar, …), el WebSocket y la capa dinámica (hormigas en
+  movimiento) son de E3; hoy la simulación sólo corre desde pruebas o scripts.
+- El aviso de Starlette sobre `httpx2` sigue (sin efecto).
+- `PROMPTS_CLAUDE_CODE.md` sigue con la numeración vieja.
+
+**Cómo probarlo manualmente**
+1. `pytest backend/tests -q` → 172 pruebas pasan.
+2. `python backend/scripts/benchmark.py` → tabla de pasos/s.
+3. `uvicorn app.main:app --reload --app-dir backend`, abrir <http://127.0.0.1:8000>:
+   se dibuja el mundo de la semilla 5735 (12 rocas, 4 fuentes con 2000, zona de patrulla
+   punteada, nido y reina). "Generar mundo" dos veces con la misma semilla da el mismo
+   dibujo; otra semilla, otro mundo; cambiar D también cambia el mundo.
+4. 60 rocas y 20 fuentes no caben → mensaje de error en rojo.

@@ -15,12 +15,38 @@
   <main class="contenido">
     <section class="panel" aria-labelledby="titulo-mundo">
       <h2 id="titulo-mundo">Mundo (sistema)</h2>
+      <form id="formulario-mundo" class="formulario">
+        <label>Semilla
+          <input name="semilla" type="number" min="1" value="5735" required>
+        </label>
+        <label>Dígitos (D)
+          <select name="digitos">
+            <option value="4" selected>4</option>
+            <option value="6">6</option>
+            <option value="8">8</option>
+          </select>
+        </label>
+        <label>Rocas
+          <input name="num_obstaculos" type="number" min="0" max="60" value="12" required>
+        </label>
+        <label>Fuentes
+          <input name="num_fuentes" type="number" min="1" max="20" value="4" required>
+        </label>
+        <button type="submit">Generar mundo</button>
+      </form>
+      <p id="mensaje-mundo" class="mensaje" role="status"></p>
       <div class="contenedor-canvas">
-        <!-- Capa estática: nido, rocas y alimento. Capa dinámica: hormigas y reina. -->
-        <canvas id="capa-estatica" width="800" height="600"></canvas>
-        <canvas id="capa-dinamica" width="800" height="600"></canvas>
-        <p class="aviso-canvas">El mundo se dibujará a partir de la etapa E2.</p>
+        <!-- Capa estática: nido, rocas y alimento. Capa dinámica: hormigas y reina (E3). -->
+        <canvas id="capa-estatica" width="1000" height="700"></canvas>
+        <canvas id="capa-dinamica" width="1000" height="700"></canvas>
       </div>
+      <ul class="leyenda">
+        <li><span class="muestra nido"></span>Nido (punto de servicio)</li>
+        <li><span class="muestra reina"></span>Reina y su radio de influencia</li>
+        <li><span class="muestra patrulla"></span>Zona de patrulla (sin rocas ni fuentes)</li>
+        <li><span class="muestra roca"></span>Roca (restricción)</li>
+        <li><span class="muestra fuente"></span>Fuente de alimento (recurso)</li>
+      </ul>
     </section>
 
     <section class="panel" aria-labelledby="titulo-generador">
