@@ -607,7 +607,7 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | GET | `/api/simulacion/estado` | — | Estado del controlador + estadísticas actuales | E3 |
 | GET | `/api/hormigas/{id}` | — | Vista didáctica: atributos, último `u` con su cálculo, último evento, siguiente evento previsto | E3 |
 | GET | `/api/eventos?id_hormiga=&limite=` | — | Últimas entradas de la bitácora | E3 |
-| GET | `/api/aleatorio/registro?desde=&limite=` | — | Página del búfer circular de números | E1 / E3 |
+| GET | `/api/aleatorio/registro?desde=&limite=` | — | Página del búfer circular de números | E3 (el núcleo lo ofrece desde E1) |
 | GET | `/api/aleatorio/registro.csv` | — | Registro completo en CSV | E4 |
 | POST | `/api/experimentos/lote` | parámetros + réplicas | Resultados agregados | E4 |
 

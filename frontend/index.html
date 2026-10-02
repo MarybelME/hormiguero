@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulador de hormiguero</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <header class="encabezado">
+    <h1>Simulador educativo de hormiguero</h1>
+    <span id="estado-servidor" class="estado-servidor">Conectando…</span>
+  </header>
+
+  <main class="contenido">
+    <section class="panel" aria-labelledby="titulo-mundo">
+      <h2 id="titulo-mundo">Mundo (sistema)</h2>
+      <div class="contenedor-canvas">
+        <!-- Capa estática: nido, rocas y alimento. Capa dinámica: hormigas y reina. -->
+        <canvas id="capa-estatica" width="800" height="600"></canvas>
+        <canvas id="capa-dinamica" width="800" height="600"></canvas>
+        <p class="aviso-canvas">El mundo se dibujará a partir de la etapa E2.</p>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="titulo-generador">
+      <h2 id="titulo-generador">Generador de números pseudoaleatorios: cuadrados medios</h2>
+      <p class="explicacion">
+        Se eleva al cuadrado el número, se completa con ceros a la izquierda hasta 2D dígitos
+        y se toman los D dígitos del centro: ese es el nuevo número, y
+        <code>u = x / 10<sup>D</sup></code>. La dirección de una hormiga sería
+        <code>u × 360°</code>.
+      </p>
+
+      <form id="formulario-generador" class="formulario">
+        <label>Semilla
+          <input id="campo-semilla" name="semilla" type="number" min="1" value="5735" required>
+        </label>
+        <label>Dígitos (D)
+          <select id="campo-digitos" name="digitos">
+            <option value="4" selected>4</option>
+            <option value="6">6</option>
+            <option value="8">8</option>
+          </select>
+        </label>
+        <label>Cantidad
+          <input id="campo-cantidad" name="cantidad" type="number" min="1" max="1000" value="20" required>
+        </label>
+        <button type="submit">Generar</button>
+      </form>
+
+      <p id="mensaje-generador" class="mensaje" role="status"></p>
+      <div class="contenedor-tabla">
+        <table id="tabla-aleatorios" class="tabla-aleatorios">
+          <thead>
+            <tr>
+              <th>i</th>
+              <th>x<sub>i</sub> (semilla)</th>
+              <th>x<sub>i</sub>²</th>
+              <th>Relleno a 2D dígitos</th>
+              <th>Centrales</th>
+              <th>u<sub>i</sub></th>
+              <th>Dirección = u·360°</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
