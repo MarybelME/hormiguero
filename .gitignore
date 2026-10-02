@@ -1,0 +1,19 @@
+# Entorno virtual de Python
+.venv/
+venv/
+
+# Archivos generados por Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Registros y resultados exportados por el simulador (CSV)
+*.csv
+
+# Configuración personal del editor
+.vscode/
+
+# Archivos del sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store
