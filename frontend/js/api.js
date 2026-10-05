@@ -39,3 +39,39 @@ export function vistaPreviaAleatorios({ semilla, digitos, cantidad }) {
     body: JSON.stringify({ generador: "cuadrados_medios", semilla, digitos, cantidad }),
   });
 }
+
+export function obtenerParametros() {
+  return pedir("/api/parametros");
+}
+
+export function obtenerEstado() {
+  return pedir("/api/simulacion/estado");
+}
+
+// Control de la simulación: iniciar, pausar, reiniciar, limpiar.
+export function controlar(accion) {
+  return pedir(`/api/simulacion/${accion}`, { method: "POST" });
+}
+
+export function fijarVelocidad(pasosPorSegundo) {
+  return pedir("/api/simulacion/velocidad", {
+    method: "PUT",
+    body: JSON.stringify({ pasos_por_segundo: pasosPorSegundo }),
+  });
+}
+
+function consulta(parametros) {
+  const datos = new URLSearchParams();
+  for (const [clave, valor] of Object.entries(parametros)) {
+    if (valor !== "" && valor !== null && valor !== undefined) datos.set(clave, valor);
+  }
+  return datos.toString();
+}
+
+export function obtenerEventos(filtros) {
+  return pedir(`/api/eventos?${consulta(filtros)}`);
+}
+
+export function obtenerRegistro(filtros) {
+  return pedir(`/api/aleatorio/registro?${consulta(filtros)}`);
+}

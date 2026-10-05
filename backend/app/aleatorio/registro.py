@@ -34,6 +34,9 @@ class RegistroAleatorio:
     def __init__(self, capacidad: int = CAPACIDAD_REGISTRO) -> None:
         self._entradas: deque[EntradaRegistro] = deque(maxlen=capacidad)
         self._total = 0
+        # Último número de cada hormiga: aunque salga del búfer, el modo didáctico puede
+        # mostrar con qué número tomó su última decisión.
+        self._ultimo_por_hormiga: dict[int, EntradaRegistro] = {}
 
     @property
     def total(self) -> int:
@@ -54,6 +57,12 @@ class RegistroAleatorio:
             raise ValueError(f"se esperaba el índice {self.siguiente_indice}; llegó {entrada.indice}")
         self._entradas.append(entrada)
         self._total += 1
+        if entrada.id_hormiga >= 0:
+            self._ultimo_por_hormiga[entrada.id_hormiga] = entrada
+
+    def ultimo_de(self, id_hormiga: int) -> EntradaRegistro | None:
+        """El último número que usó esa hormiga (siempre disponible, aunque ya no esté en el búfer)."""
+        return self._ultimo_por_hormiga.get(id_hormiga)
 
     def buscar(self, indice: int) -> EntradaRegistro | None:
         """La entrada con ese índice global, o None si ya salió del búfer (o no existe)."""
@@ -74,3 +83,4 @@ class RegistroAleatorio:
     def limpiar(self) -> None:
         self._entradas.clear()
         self._total = 0
+        self._ultimo_por_hormiga.clear()

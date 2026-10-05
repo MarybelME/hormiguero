@@ -19,6 +19,14 @@
   --mundo-roca: #6b7280;
   --mundo-fuente: #16a34a;
   --mundo-texto: #1d2330;
+  --mundo-seleccion: #dc2626;
+  /* Colores de cada EstadoHormiga (códigos 0–5) */
+  --estado-0: #8b5a2b;
+  --estado-1: #1d4ed8;
+  --estado-2: #9333ea;
+  --estado-3: #ea580c;
+  --estado-4: #15803d;
+  --estado-5: #0f172a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +50,13 @@
     --mundo-roca: #9ca3af;
     --mundo-fuente: #4ade80;
     --mundo-texto: #e6e9ef;
+    --mundo-seleccion: #f87171;
+    --estado-0: #c08a52;
+    --estado-1: #60a5fa;
+    --estado-2: #c084fc;
+    --estado-3: #fb923c;
+    --estado-4: #4ade80;
+    --estado-5: #f1f5f9;
   }
 }
 
@@ -74,7 +89,7 @@ body {
   display: grid;
   gap: 1rem;
   padding: 1rem;
-  max-width: 1200px;
+  max-width: 1500px;
   margin: 0 auto;
 }
 
@@ -158,7 +173,10 @@ body {
   font: inherit;
 }
 
-.formulario button {
+.formulario button,
+.barra-control button,
+.formulario-parametros button,
+.panel-didactico button {
   padding: 0.4rem 1rem;
   border: 0;
   border-radius: 4px;
@@ -213,3 +231,168 @@ body {
   font-style: italic;
   white-space: normal;
 }
+
+button:disabled { opacity: 0.45; cursor: default; }
+button.secundario {
+  background: transparent;
+  color: var(--acento);
+  border: 1px solid var(--acento);
+}
+
+.ayuda { color: var(--texto-suave); font-size: 0.85rem; margin: 0.4rem 0; }
+.aviso { color: var(--degenerado-texto); background: var(--degenerado); padding: 0.4rem 0.6rem; border-radius: 4px; }
+
+/* --- Barra de control ---------------------------------------------------------------- */
+
+.barra-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.control-velocidad { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.control-velocidad input[type="range"] { width: 10rem; }
+.control-velocidad input[type="number"] {
+  width: 5rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+.unidad { color: var(--texto-suave); }
+
+.estado-controlador {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  font-size: 0.85rem;
+}
+.estado-controlador[data-estado="corriendo"] { color: var(--ok); border-color: var(--ok); }
+.estado-controlador[data-estado="pausado"] { color: var(--resaltado); border-color: var(--resaltado); }
+
+/* --- Mundo y columna lateral ------------------------------------------------------------ */
+
+.disposicion-simulacion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .disposicion-simulacion { grid-template-columns: minmax(0, 1fr); }
+}
+
+.contenedor-canvas canvas#capa-dinamica { cursor: crosshair; }
+
+.columna-lateral { display: grid; gap: 1rem; min-width: 0; }
+.columna-lateral h3 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+
+.estadisticas,
+.atributos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.estadisticas dt,
+.atributos dt { color: var(--texto-suave); }
+.estadisticas dd,
+.atributos dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
+.muestra.cuadrada { border-radius: 2px; width: 0.7rem; height: 0.7rem; }
+
+/* --- Panel didáctico ------------------------------------------------------------------- */
+
+.panel-didactico {
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.encabezado-seleccion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.encabezado-seleccion button { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+.encabezado-seleccion .ayuda { margin: 0 auto 0 0; }
+
+.bloque { margin-top: 0.75rem; }
+.bloque h4 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+.bloque p { margin: 0.3rem 0; }
+
+.pasos-calculo {
+  margin: 0.3rem 0;
+  padding-left: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.pasos-calculo .relleno { font-family: ui-monospace, Consolas, monospace; }
+.pasos-calculo .centrales { color: var(--resaltado); font-weight: 700; }
+.pasos-calculo .resultado { font-weight: 600; }
+
+/* --- Parámetros ------------------------------------------------------------------------ */
+
+.grupo-parametros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+}
+.grupo-parametros legend { padding: 0 0.3rem; font-weight: 600; }
+
+.grupo-parametros label {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+.grupo-parametros code { font-size: 0.75rem; color: var(--texto-suave); }
+.grupo-parametros small { color: var(--texto-suave); }
+.grupo-parametros input,
+.grupo-parametros select {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+.grupo-parametros input:invalid { border-color: var(--error); }
+
+.formulario-parametros details { margin-bottom: 0.75rem; }
+.formulario-parametros summary { cursor: pointer; margin-bottom: 0.5rem; }
+.formulario-parametros .acciones { display: flex; gap: 0.5rem; }
+
+.casilla { display: flex !important; align-items: center; gap: 0.35rem; }
+.formulario .casilla input { width: auto; }
+
+/* --- Tablas de bitácora y registro --------------------------------------------------------- */
+
+.tabla-datos {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.tabla-datos th,
+.tabla-datos td {
+  padding: 0.3rem 0.55rem;
+  text-align: right;
+  border-bottom: 1px solid var(--borde);
+  white-space: nowrap;
+}
+.tabla-datos th { position: sticky; top: 0; background: var(--panel); }
+.tabla-datos .izquierda { text-align: left; white-space: normal; }
+.tabla-datos tr.degenerado td { background: var(--degenerado); color: var(--degenerado-texto); }

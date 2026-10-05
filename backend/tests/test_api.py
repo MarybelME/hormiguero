@@ -67,6 +67,14 @@ def test_parametros_por_defecto_y_esquema() -> None:
     datos = cliente.get("/api/parametros").json()
     assert datos["valores"]["num_hormigas"] == 2000
     assert datos["esquema"]["properties"]["p_seguir_reina"]["maximum"] == 1.0
+    assert datos["demo"]["num_hormigas"] == 3000
+
+
+def test_archivos_del_frontend_sin_cache() -> None:
+    """El navegador debe revalidar el JS: un módulo viejo en caché rompería la interfaz."""
+    respuesta = cliente.get("/js/main.js")
+    assert respuesta.status_code == 200
+    assert respuesta.headers["cache-control"] == "no-cache"
 
 
 def test_configurar_y_consultar_mundo() -> None:

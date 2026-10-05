@@ -45,3 +45,12 @@ def test_esquema_tiene_unidad_y_rango() -> None:
     assert radio["unidad"] == "unidades"
     assert (radio["minimum"], radio["maximum"]) == (0.0, 300.0)
     assert radio["description"]
+
+
+def test_parametros_demo_generan_un_mundo() -> None:
+    from app.config import PARAMETROS_DEMO
+    from app.nucleo.simulacion import Simulacion
+
+    simulacion = Simulacion(PARAMETROS_DEMO)
+    assert len(simulacion.mundo.obstaculos) == PARAMETROS_DEMO.num_obstaculos
+    assert len(simulacion.mundo.fuentes) == PARAMETROS_DEMO.num_fuentes

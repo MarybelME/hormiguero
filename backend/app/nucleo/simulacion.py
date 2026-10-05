@@ -11,6 +11,8 @@ las hormigas con evento se atienden en orden ascendente de id. Misma semilla y m
 parámetros ⇒ misma simulación.
 """
 
+import math
+from dataclasses import asdict
 from typing import Any
 
 from app import config
@@ -34,6 +36,7 @@ from app.config import ParametrosSimulacion
 from app.espacial.colisiones import resolver_colisiones
 from app.estadisticas.contadores import Estadisticas
 from app.eventos.bitacora import CAPACIDAD_BITACORA, Bitacora
+from app.eventos.prediccion import predecir
 from app.modelo.generacion_mundo import generar_mundo
 from app.modelo.mundo import Mundo
 from app.nucleo.contexto import ContextoPaso
@@ -121,5 +124,31 @@ class Simulacion:
             numeros_generados=self.aleatorio.total_generados,
             resiembras={flujo.value: self.aleatorio.degeneraciones(flujo) for flujo in Flujo},
             alimento_en_nido=self.mundo.nido.alimento_almacenado,
+            alimento_por_fuente=[f.cantidad for f in self.mundo.fuentes],
         )
+        return datos
+
+    def vista_hormiga(self, id_hormiga: int) -> dict[str, Any]:
+        """Todo lo que el modo didáctico muestra de una hormiga (no modifica nada).
+
+        Incluye sus atributos, el último número pseudoaleatorio que usó con su cálculo
+        completo, su último evento y la predicción del siguiente, que no consume números.
+        """
+        datos = self.mundo.hormigas.vista(id_hormiga)
+        indice = datos["ultimo_indice_u"]
+        entrada = self.aleatorio.registro.ultimo_de(id_hormiga)
+        if entrada is None or entrada.indice != indice:  # p. ej. un número sin propósito de hormiga
+            entrada = self.aleatorio.registro.buscar(indice) if indice > 0 else None
+        datos["ultimo_numero"] = None if entrada is None else asdict(entrada)
+        datos["ultimo_numero_fuera_de_bufer"] = indice > 0 and entrada is None
+        if math.isnan(datos["ultimo_u"]):
+            datos["ultimo_u"] = None
+        prediccion = predecir(self.mundo, self.parametros, id_hormiga)
+        datos["siguiente_evento"] = {
+            "tipo": None if prediccion.tipo is None else prediccion.tipo.name,
+            "pasos": prediccion.pasos,
+            "descripcion": prediccion.descripcion,
+            "aleatorio": prediccion.aleatorio,
+        }
+        datos["tick"] = self.tick
         return datos

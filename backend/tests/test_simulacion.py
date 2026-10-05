@@ -8,6 +8,7 @@ import pytest
 from app.aleatorio.variables import angulo
 from app.comportamiento.transiciones import cambiar_estado
 from app.config import ParametrosSimulacion
+from app.eventos.bitacora import EVENTOS_POR_HORMIGA
 from app.eventos.tipos import TipoEvento
 from app.modelo.estados import (
     MATRIZ_TRANSICIONES,
@@ -195,3 +196,49 @@ def test_energia_baja_hace_regresar() -> None:
     bajas = eventos(simulacion, TipoEvento.ENERGIA_BAJA)
     assert bajas
     assert all(b.detalle["energia"] < simulacion.parametros.umbral_regreso for b in bajas)
+
+
+# --- Contadores (RF-40) ------------------------------------------------------------------
+
+
+def test_contadores_coinciden_con_conteo_directo() -> None:
+    """RF-40: cada contador coincide con un conteo directo del estado o de la bitácora."""
+    simulacion = simular(2500, num_hormigas=800)
+    est = simulacion.estadisticas
+    estados = simulacion.mundo.hormigas.estado
+    for estado in E:
+        assert est.conteo_estados[estado] == int((estados == estado).sum()), estado.name
+    assert est.salidas == len(eventos(simulacion, TipoEvento.SALIDA_NIDO))
+    assert est.colisiones == len(eventos(simulacion, TipoEvento.COLISION_PREVISTA))
+    assert est.colisiones_borde == len(eventos(simulacion, TipoEvento.COLISION_BORDE))
+    assert est.llegadas_nido == len(eventos(simulacion, TipoEvento.LLEGADA_NIDO))
+    assert est.fuentes_agotadas == len(eventos(simulacion, TipoEvento.FUENTE_AGOTADA))
+    assert est.decisiones_seguir == len(eventos(simulacion, TipoEvento.ENTRADA_RADIO_REINA))
+    depositado = sum(e.detalle["cantidad"] for e in eventos(simulacion, TipoEvento.DEPOSITO_ALIMENTO))
+    assert est.alimento_recolectado == depositado == simulacion.mundo.nido.alimento_almacenado
+    resumen = simulacion.resumen()
+    assert resumen["numeros_generados"] == simulacion.aleatorio.registro.total
+    assert sum(resumen["resiembras"].values()) == len(eventos(simulacion, TipoEvento.GENERADOR_DEGENERADO))
+
+
+def test_bitacora_filtrar() -> None:
+    simulacion = simular(300, num_hormigas=200)
+    todos = simulacion.bitacora.ultimos(simulacion.bitacora.total)
+    de_la_5 = simulacion.bitacora.filtrar(10_000, id_hormiga=5)
+    assert de_la_5 == [e for e in todos if e.id_hormiga == 5][-EVENTOS_POR_HORMIGA:]
+    salidas = simulacion.bitacora.filtrar(3, tipo=TipoEvento.SALIDA_NIDO)
+    assert salidas == [e for e in todos if e.tipo is TipoEvento.SALIDA_NIDO][-3:]
+
+
+def test_la_hormiga_sigue_rastreable_aunque_los_bufers_se_llenen() -> None:
+    """RF-50: con búferes pequeños, el último u y los eventos recientes de cada hormiga siguen disponibles."""
+    simulacion = Simulacion(ParametrosSimulacion(num_hormigas=500), capacidad_registro=50, capacidad_bitacora=50)
+    simulacion.avanzar(400)
+    for id_hormiga in (0, 250, 499):
+        vista = simulacion.vista_hormiga(id_hormiga)
+        assert vista["ultimo_numero"] is not None
+        assert vista["ultimo_numero"]["indice"] == vista["ultimo_indice_u"]
+        assert vista["ultimo_numero"]["id_hormiga"] == id_hormiga
+        assert vista["ultimo_numero"]["u"] == pytest.approx(vista["ultimo_u"])
+        recientes = simulacion.bitacora.filtrar(EVENTOS_POR_HORMIGA, id_hormiga=id_hormiga)
+        assert recientes and recientes[-1].tick == vista["tick_ultimo_evento"]

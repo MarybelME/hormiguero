@@ -4,7 +4,7 @@
 
 const DECIMALES_ANGULO = 3;
 
-function celda(texto, clase) {
+export function celda(texto, clase) {
   const td = document.createElement("td");
   td.textContent = texto;
   if (clase) td.className = clase;
@@ -12,7 +12,7 @@ function celda(texto, clase) {
 }
 
 // Relleno con los dígitos centrales resaltados: "32" + "8902" (resaltado) + "25".
-function celdaRelleno(relleno, digitos) {
+export function celdaRelleno(relleno, digitos) {
   const td = celda("", "relleno");
   const inicio = digitos / 2;
   const centrales = document.createElement("span");
@@ -22,11 +22,11 @@ function celdaRelleno(relleno, digitos) {
   return td;
 }
 
-function rellenarCeros(valor, digitos) {
+export function rellenarCeros(valor, digitos) {
   return String(valor).padStart(digitos, "0");
 }
 
-function describirDegeneracion(deg, digitos) {
+export function describirDegeneracion(deg, digitos) {
   const estado = rellenarCeros(deg.estado, digitos);
   if (deg.tipo === "CERO") {
     return `Degeneró: el generador cayó en ${estado} (desde ahí sólo produciría ceros).`;

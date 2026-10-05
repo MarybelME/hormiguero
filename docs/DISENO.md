@@ -574,7 +574,7 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
     ├── index.html
     ├── css/estilos.css
     └── js/  main.js, api.js, ws.js, protocolo.js, render.js, controles.js,
-             estadisticas.js, panelDidactico.js, tablaAleatorios.js
+             estadisticas.js, panelDidactico.js, bitacora.js, tablaAleatorios.js
 ```
 
 | Cambio | Justificación |
@@ -585,6 +585,7 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | `modelo/generacion_mundo.py` | Separa "crear el mundo con la semilla" (aceptación-rechazo, propósito `MUNDO`) de la definición de las clases. |
 | `comportamiento/` con un archivo por estado + `reina.py` + `transiciones.py` | Cada regla se explica en clase como "el comportamiento de la entidad en ese estado". |
 | `aleatorio/variables.py` | Mapeos puros (`angulo`, `bernoulli`, `uniforme`) separados de los generadores, como pide la sección 6 de CLAUDE.md. |
+| `frontend/js/bitacora.js` | Tablas de la bitácora filtrable y del registro de números de la corrida (E3); separa esas tablas del panel de la hormiga seleccionada. |
 | `frontend/js/tablaAleatorios.js` | Vista de tabla paso a paso de la etapa E1 (semilla → cuadrado → relleno → centrales → u). |
 
 ---
@@ -600,14 +601,14 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | POST | `/api/aleatorio/vista-previa` | `{generador, semilla, digitos, cantidad}` | Tabla paso a paso + degeneraciones detectadas (no toca la simulación) | E1 |
 | POST | `/api/simulacion/configurar` | `ParametrosSimulacion` | `{mundo: capa estática}`; 422 si es inválido | E2 / E3 |
 | GET | `/api/mundo` | — | Capa estática: dimensiones, nido, rocas, fuentes (con cantidad) | E2 |
-| POST | `/api/simulacion/iniciar` | — | `{estado_controlador: "corriendo"}` | E3 |
+| POST | `/api/simulacion/iniciar` | — | `{estado_controlador: "corriendo"}`; 409 si el estado no lo permite | E3 |
 | POST | `/api/simulacion/pausar` | — | `{estado_controlador: "pausado"}` | E3 |
 | POST | `/api/simulacion/reiniciar` | — | `{estado_controlador, tick: 0}` **[DA-c]** | E3 |
 | POST | `/api/simulacion/limpiar` | — | `{estado_controlador: "vacio"}` **[DA-c]** | E3 |
 | PUT | `/api/simulacion/velocidad` | `{pasos_por_segundo}` | `{pasos_por_segundo}` | E3 |
 | GET | `/api/simulacion/estado` | — | Estado del controlador + estadísticas actuales | E3 |
 | GET | `/api/hormigas/{id}` | — | Vista didáctica: atributos, último `u` con su cálculo, último evento, siguiente evento previsto | E3 |
-| GET | `/api/eventos?id_hormiga=&limite=` | — | Últimas entradas de la bitácora | E3 |
+| GET | `/api/eventos?id_hormiga=&tipo=&limite=` | — | Últimas entradas de la bitácora (y catálogo de tipos); por hormiga, sus últimos 50 eventos | E3 |
 | GET | `/api/aleatorio/registro?desde=&limite=` | — | Página del búfer circular de números | E3 (el núcleo lo ofrece desde E1) |
 | GET | `/api/aleatorio/registro.csv` | — | Registro completo en CSV | E4 |
 | POST | `/api/experimentos/lote` | parámetros + réplicas | Resultados agregados | E4 |
@@ -622,10 +623,16 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | `{"tipo": "estadisticas", ...}` | texto JSON: contadores, conteos por estado, cantidad por fuente, t | ~4 por segundo |
 | `{"tipo": "mundo", ...}` | texto JSON: capa estática | al configurar y al agotarse una fuente |
 | `{"tipo": "seleccion", ...}` | texto JSON: vista didáctica de la hormiga seleccionada | ~4 por segundo mientras haya selección |
-| `{"tipo": "control", "estado": ...}` | texto JSON | al cambiar el estado del controlador |
+| `{"tipo": "control", "estado_controlador": ..., "pasos_por_segundo": ..., "tick": ...}` | texto JSON | al conectarse y al cambiar el estado o la velocidad |
+| `{"tipo": "deseleccion"}` | texto JSON | cuando una corrida nueva borra las selecciones (E3) |
+| `{"tipo": "error", "mensaje": ...}` | texto JSON | mensaje inválido del cliente o fallo del bucle (E3) |
 
 **Cliente → servidor** (texto JSON): `{"tipo": "seleccionar", "id": 123}`,
 `{"tipo": "deseleccionar"}`. Los comandos de control van por REST.
+
+Al conectarse, el cliente recibe `control` y, si hay mundo, `mundo`, `estadisticas` y el cuadro
+actual. Un cliente lento no acumula cuadros: se conserva sólo el último, mientras que los
+mensajes JSON se entregan en orden (E3).
 
 **Formato binario del cuadro (versión 1, little-endian):**
 
@@ -877,6 +884,8 @@ recomendación (**R**); abajo se conservan las opciones consideradas como regist
 | j | Pruebas de la API | `httpx` en `requirements.txt` |
 | k | Semilla del flujo `COMPORTAMIENTO` (E2) | `(semilla + 10^D/2) mod 10^D`; si da 0, se usa 1 |
 | l | Reina y rocas (E2) | Zona de patrulla libre de rocas y fuentes; si la reina va a salir de ella, gira hacia el nido sin consumir `u` |
+| m | Varios clientes (E3) | Una sola simulación compartida por todas las pestañas; la selección de hormiga es propia de cada pestaña |
+| n | Parámetros en vivo (E3) | Sólo la velocidad cambia en vivo; cualquier otro parámetro requiere "Aplicar" (corrida nueva en t = 0) |
 
 ### a) Política ante la degeneración de cuadrados medios
 
@@ -1023,5 +1032,26 @@ El `TestClient` de FastAPI necesita `httpx`, que no está en la lista de depende
    gira hacia el nido (determinista, sin consumir `u`).
 2. La reina choca como una obrera y cambia de rumbo con un nuevo `u`.
 3. La reina ignora las rocas.
+
+**Elegida: opción 1.**
+
+### m) Varios clientes a la vez (resuelta al iniciar E3)
+
+1. **Una simulación compartida**: el servidor tiene un único `ControladorSimulacion`; todas
+   las pestañas reciben los mismos cuadros y cualquiera puede controlarla. Encaja con el uso en
+   clase (proyector) y con "el servidor es la única fuente de verdad".
+2. Una simulación por conexión: más realista para un laboratorio, pero exige sesiones en REST
+   y multiplica el uso de CPU.
+
+**Elegida: opción 1.** La hormiga seleccionada es una preferencia de vista: cada pestaña
+tiene la suya (no altera la simulación).
+
+### n) Parámetros que cambian en vivo (resuelta al iniciar E3)
+
+1. **Sólo la velocidad** (`pasos_por_segundo`) cambia mientras corre; los demás parámetros se
+   envían con "Aplicar", que crea una corrida nueva en t = 0. Cada corrida queda descrita por
+   un único juego de parámetros y es reproducible.
+2. Varios parámetros en caliente (probabilidad, umbral…): más interactivo, pero la corrida ya
+   no se describe con un solo juego de parámetros.
 
 **Elegida: opción 1.**

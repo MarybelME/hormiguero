@@ -13,49 +13,145 @@
   </header>
 
   <main class="contenido">
-    <section class="panel" aria-labelledby="titulo-mundo">
-      <h2 id="titulo-mundo">Mundo (sistema)</h2>
-      <form id="formulario-mundo" class="formulario">
-        <label>Semilla
-          <input name="semilla" type="number" min="1" value="5735" required>
+    <!-- Simulación en tiempo real: controles, mundo, estadísticas y hormiga seleccionada -->
+    <section class="panel" aria-labelledby="titulo-simulacion">
+      <h2 id="titulo-simulacion">Simulación (sistema)</h2>
+
+      <div class="barra-control">
+        <button id="boton-iniciar" type="button">▶ Iniciar</button>
+        <button id="boton-pausar" type="button">⏸ Pausar</button>
+        <button id="boton-reiniciar" type="button" title="Vuelve a t = 0 con la misma configuración: la corrida se repite idéntica">↺ Reiniciar</button>
+        <button id="boton-limpiar" type="button" class="secundario" title="Borra mundo, hormigas, registros y estadísticas">Limpiar</button>
+        <button id="boton-demo" type="button" class="secundario" title="Carga parámetros de demostración (3 000 hormigas, fuentes pequeñas, p = 0.5) y la inicia">★ Simulación demo</button>
+        <label class="control-velocidad">Velocidad
+          <input id="rango-velocidad" type="range" min="1" max="1000" value="30">
+          <input id="campo-velocidad" type="number" min="1" max="1000" value="30">
+          <span class="unidad">pasos/s</span>
         </label>
-        <label>Dígitos (D)
-          <select name="digitos">
-            <option value="4" selected>4</option>
-            <option value="6">6</option>
-            <option value="8">8</option>
-          </select>
-        </label>
-        <label>Rocas
-          <input name="num_obstaculos" type="number" min="0" max="60" value="12" required>
-        </label>
-        <label>Fuentes
-          <input name="num_fuentes" type="number" min="1" max="20" value="4" required>
-        </label>
-        <button type="submit">Generar mundo</button>
-      </form>
-      <p id="mensaje-mundo" class="mensaje" role="status"></p>
-      <div class="contenedor-canvas">
-        <!-- Capa estática: nido, rocas y alimento. Capa dinámica: hormigas y reina (E3). -->
-        <canvas id="capa-estatica" width="1000" height="700"></canvas>
-        <canvas id="capa-dinamica" width="1000" height="700"></canvas>
+        <span id="estado-controlador" class="estado-controlador">—</span>
       </div>
-      <ul class="leyenda">
-        <li><span class="muestra nido"></span>Nido (punto de servicio)</li>
-        <li><span class="muestra reina"></span>Reina y su radio de influencia</li>
-        <li><span class="muestra patrulla"></span>Zona de patrulla (sin rocas ni fuentes)</li>
-        <li><span class="muestra roca"></span>Roca (restricción)</li>
-        <li><span class="muestra fuente"></span>Fuente de alimento (recurso)</li>
-      </ul>
+      <p id="mensaje-simulacion" class="mensaje" role="status"></p>
+
+      <div class="disposicion-simulacion">
+        <div>
+          <div class="contenedor-canvas">
+            <!-- Capa estática: zona de patrulla, nido, rocas y alimento (se redibuja sólo al cambiar).
+                 Capa dinámica: hormigas, reina y hormiga seleccionada (cada cuadro). -->
+            <canvas id="capa-estatica" width="1000" height="700"></canvas>
+            <canvas id="capa-dinamica" width="1000" height="700"></canvas>
+          </div>
+          <p class="ayuda">Haz clic sobre una hormiga para seguirla en el panel didáctico.</p>
+          <ul class="leyenda" id="leyenda">
+            <li><span class="muestra nido"></span>Nido (punto de servicio)</li>
+            <li><span class="muestra reina"></span>Reina y su radio de influencia</li>
+            <li><span class="muestra patrulla"></span>Zona de patrulla</li>
+            <li><span class="muestra roca"></span>Roca (restricción)</li>
+            <li><span class="muestra fuente"></span>Fuente de alimento (recurso)</li>
+          </ul>
+          <ul class="leyenda" id="leyenda-estados" aria-label="Estados de las hormigas"></ul>
+        </div>
+
+        <div class="columna-lateral">
+          <section aria-labelledby="titulo-estadisticas">
+            <h3 id="titulo-estadisticas">Estadísticas en vivo (variables de estado)</h3>
+            <dl id="estadisticas" class="estadisticas"></dl>
+          </section>
+
+          <section aria-labelledby="titulo-didactico">
+            <h3 id="titulo-didactico">Hormiga seleccionada (entidad)</h3>
+            <div id="panel-didactico" class="panel-didactico">
+              <p class="ayuda">Ninguna hormiga seleccionada.</p>
+            </div>
+          </section>
+        </div>
+      </div>
     </section>
 
+    <!-- Parámetros (entradas del modelo), generados con los rangos que define el servidor -->
+    <section class="panel" aria-labelledby="titulo-parametros">
+      <h2 id="titulo-parametros">Parámetros (entradas del modelo)</h2>
+      <p class="explicacion">
+        Al aplicar se crea una corrida nueva en t = 0. Sólo la velocidad cambia en vivo; con la
+        misma semilla y los mismos parámetros la simulación se repite idéntica.
+      </p>
+      <form id="formulario-parametros" class="formulario-parametros" novalidate>
+        <fieldset id="parametros-principales" class="grupo-parametros">
+          <legend>Principales</legend>
+        </fieldset>
+        <details>
+          <summary>Avanzados</summary>
+          <fieldset id="parametros-avanzados" class="grupo-parametros"></fieldset>
+        </details>
+        <div class="acciones">
+          <button type="submit">Aplicar (nueva corrida)</button>
+          <button type="button" id="boton-valores-defecto" class="secundario">Valores por defecto</button>
+        </div>
+      </form>
+      <p id="mensaje-parametros" class="mensaje" role="status"></p>
+    </section>
+
+    <!-- Bitácora de eventos -->
+    <section class="panel" aria-labelledby="titulo-bitacora">
+      <h2 id="titulo-bitacora">Bitácora de eventos</h2>
+      <form id="filtros-bitacora" class="formulario">
+        <label>Hormiga (id)
+          <input name="id_hormiga" type="number" min="0" placeholder="todas">
+        </label>
+        <label>Tipo de evento
+          <select name="tipo"><option value="">todos</option></select>
+        </label>
+        <label>Últimos
+          <input name="limite" type="number" min="1" max="1000" value="100">
+        </label>
+        <button type="submit">Actualizar</button>
+        <label class="casilla"><input name="automatico" type="checkbox" checked> Actualizar cada segundo</label>
+      </form>
+      <p id="mensaje-bitacora" class="mensaje" role="status"></p>
+      <div class="contenedor-tabla">
+        <table id="tabla-bitacora" class="tabla-datos">
+          <thead>
+            <tr><th>Tick</th><th>t (s)</th><th>Evento</th><th>Hormiga</th><th>Número (índice)</th><th class="izquierda">Detalle</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Registro de números pseudoaleatorios de la corrida -->
+    <section class="panel" aria-labelledby="titulo-registro">
+      <h2 id="titulo-registro">Registro de números pseudoaleatorios de la corrida</h2>
+      <form id="filtros-registro" class="formulario">
+        <label>Desde el índice
+          <input name="desde" type="number" min="1" placeholder="últimos">
+        </label>
+        <label>Cantidad
+          <input name="limite" type="number" min="1" max="1000" value="50">
+        </label>
+        <button type="submit">Actualizar</button>
+        <label class="casilla"><input name="automatico" type="checkbox"> Actualizar cada segundo</label>
+      </form>
+      <p id="mensaje-registro" class="mensaje" role="status"></p>
+      <div class="contenedor-tabla">
+        <table id="tabla-registro" class="tabla-datos tabla-aleatorios">
+          <thead>
+            <tr>
+              <th>Índice</th><th>Flujo</th><th class="izquierda">Propósito</th><th>Hormiga</th><th>Tick</th>
+              <th>x<sub>i</sub></th><th>x<sub>i</sub>²</th><th>Relleno</th><th>Centrales</th><th>u</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Vista previa del generador (etapa E1): independiente de la simulación -->
     <section class="panel" aria-labelledby="titulo-generador">
       <h2 id="titulo-generador">Generador de números pseudoaleatorios: cuadrados medios</h2>
       <p class="explicacion">
         Se eleva al cuadrado el número, se completa con ceros a la izquierda hasta 2D dígitos
         y se toman los D dígitos del centro: ese es el nuevo número, y
         <code>u = x / 10<sup>D</sup></code>. La dirección de una hormiga sería
-        <code>u × 360°</code>.
+        <code>u × 360°</code>. Esta tabla usa un generador aparte: no altera la simulación.
       </p>
 
       <form id="formulario-generador" class="formulario">
@@ -96,5 +192,15 @@
   </main>
 
   <script type="module" src="js/main.js"></script>
+  <script>
+    // Si la interfaz no termina de cargar (p. ej. un módulo JS viejo en caché), se avisa en
+    // vez de dejar botones que no hacen nada. main.js marca <body data-lista="si"> al terminar.
+    setTimeout(function () {
+      if (document.body.dataset.lista === "si") return;
+      var aviso = document.getElementById("estado-servidor");
+      aviso.textContent = "La interfaz no terminó de cargar: recarga con Ctrl+F5";
+      aviso.className = "estado-servidor error";
+    }, 5000);
+  </script>
 </body>
 </html>

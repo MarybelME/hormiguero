@@ -92,3 +92,21 @@ def semilla_comportamiento(semilla: int, digitos: int) -> int:
     modulo = 10**digitos
     derivada = (semilla + modulo // 2) % modulo
     return derivada if derivada != 0 else 1
+
+
+# --- Simulación demo ----------------------------------------------------------------------
+# Configuración para mostrar en clase, en pocos segundos, todos los fenómenos: muchas
+# hormigas, fuentes pequeñas que se agotan, una reina con radio amplio y p = 0.5 (para
+# comparar p̂ con p), y D = 4, con el que la degeneración de cuadrados medios aparece pronto.
+PARAMETROS_DEMO = ParametrosSimulacion(
+    num_hormigas=3000,
+    semilla=2468,
+    digitos=4,
+    pasos_por_segundo=60,
+    num_obstaculos=18,
+    num_fuentes=6,
+    alimento_por_fuente=300,
+    radio_reina=120.0,
+    p_seguir_reina=0.5,
+    salidas_por_paso=10,
+)
