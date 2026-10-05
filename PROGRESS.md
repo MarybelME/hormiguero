@@ -12,17 +12,19 @@ va. La bitácora detallada de cada etapa está en [docs/PROGRESO.md](docs/PROGRE
 | E0 Análisis y diseño | Terminada |
 | E1 Base y generadores | Terminada |
 | E2 Modelo y motor | Terminada |
-| E3 Tiempo real, interfaz y modo didáctico | Terminada (pendiente de revisión) |
-| E4 Experimentación, feromonas y pulido | Pendiente |
+| E3 Tiempo real, interfaz y modo didáctico | Terminada |
+| E4 Experimentación, feromonas y pulido | Terminada (pendiente de revisión) |
 
 Qué se puede hacer hoy: generar el mundo con una semilla, correr la simulación en tiempo real
 (iniciar, pausar, reiniciar, limpiar, cambiar la velocidad), ver las estadísticas en vivo,
 seleccionar una hormiga con un clic para ver el número pseudoaleatorio que usó y su cálculo,
 consultar la bitácora de eventos y el registro de números, y lanzar una **simulación demo**.
+Desde E4: cuatro generadores (cuadrados medios, congruencial lineal y multiplicativo, NumPy),
+laboratorio con pruebas χ², K-S y corridas, exportación a CSV, réplicas por lote con
+intervalos de confianza y feromonas. Para dar clase: [docs/guia_docente.md](docs/guia_docente.md).
 
-> **Importante:** un clon sólo trae lo que está subido a GitHub. Si la etapa E3 todavía no
-> tiene commit y push, el clon tendrá la versión de la etapa E2 (sin tiempo real). Comprueba
-> con `git log --oneline -1` que el último commit sea el de la etapa 3.
+> **Importante:** un clon sólo trae lo que está subido a GitHub. Comprueba con
+> `git log --oneline -1` que el último commit sea el de la etapa que esperas (la 4).
 
 ---
 
@@ -77,13 +79,14 @@ Desde la carpeta del proyecto, con el entorno activado:
 pytest backend/tests -q
 ```
 
-Deben pasar todas las pruebas (216 al cerrar la etapa E3). El aviso de Starlette sobre `httpx2`
+Deben pasar todas las pruebas (342 al cerrar la etapa E4). El aviso de Starlette sobre `httpx2`
 es normal y no afecta.
 
 Opcional, para medir el rendimiento del núcleo sin servidor:
 
 ```powershell
-python backend/scripts/benchmark.py
+python backend/scripts/benchmark.py              # añade --feromonas para medirlas
+python backend/scripts/experimento_lote.py --replicas 5 --pasos 500   # réplicas sin servidor
 ```
 
 ---
@@ -99,7 +102,8 @@ Abre <http://127.0.0.1:8000>. La documentación interactiva de la API está en
 
 Prueba rápida:
 
-1. Pulsa **★ Simulación demo**: se cargan 3 000 hormigas y la simulación arranca sola.
+1. Pulsa **★ Simulación demo**: se cargan 3 000 hormigas con feromonas y la simulación arranca
+   sola; en segundos aparecen rastros rosa entre el nido y las fuentes.
 2. Pulsa **Pausar** y haz clic sobre una hormiga: el panel muestra su último número
    pseudoaleatorio, su cálculo paso a paso y el siguiente evento previsto.
 3. **Reiniciar** vuelve a t = 0: al iniciar de nuevo se repite exactamente la misma corrida.
@@ -125,5 +129,5 @@ Prueba rápida:
 - Al terminar: `git add -A`, `git commit -m "…"` y `git push`, para tenerlo en las dos PCs.
 - Si trabajas con Claude Code, la guía permanente es [CLAUDE.md](CLAUDE.md); cada etapa empieza
   leyendo [docs/DISENO.md](docs/DISENO.md) y [docs/PROGRESO.md](docs/PROGRESO.md).
-- Siguiente paso del plan: revisar E3 y, cuando se apruebe, empezar la etapa **E4**
-  (réplicas por lote, CSV, pruebas estadísticas, otros generadores, feromonas y guía docente).
+- Las cuatro etapas del plan están hechas; falta la revisión de E4. Los CSV se abren con doble
+  clic en Excel en español (separador `;`, coma decimal).

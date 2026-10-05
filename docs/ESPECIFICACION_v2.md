@@ -132,8 +132,8 @@ Cada requisito tiene un criterio de aceptación (CA) verificable y la etapa en q
 | Parámetro | Nombre | Unidad | Rango | Defecto |
 |---|---|---|---|---|
 | Número de hormigas | `num_hormigas` | hormigas | 1 – 20 000 | 2 000 |
-| Semilla | `semilla` | entero de D dígitos | 1 – 10^D − 1 | 5735 |
-| Generador | `generador` | — | `cuadrados_medios` (más en E4) | `cuadrados_medios` |
+| Semilla | `semilla` | entero | 1 – m − 1 (m = 10^D en cuadrados medios; ver DISENO.md, decisión r) | 5735 |
+| Generador | `generador` | — | `cuadrados_medios`, `congruencial_lineal`, `congruencial_multiplicativo`, `numpy` (E4) | `cuadrados_medios` |
 | Dígitos del generador | `digitos` | dígitos | 4, 6, 8 | 4 |
 | Velocidad de simulación | `pasos_por_segundo` | pasos/s | 1 – 1 000 | 30 |
 | Número de rocas | `num_obstaculos` | rocas | 0 – 60 | 12 |
@@ -141,12 +141,16 @@ Cada requisito tiene un criterio de aceptación (CA) verificable y la etapa en q
 | Alimento por fuente | `alimento_por_fuente` | unidades | 1 – 100 000 | 2 000 |
 | Radio de influencia de la reina | `radio_reina` | unidades de longitud | 0 – 300 | 80 |
 | Probabilidad de seguir a la reina | `p_seguir_reina` | probabilidad | 0 – 1 | 0.3 |
+| Feromonas | `feromonas_activas` | sí / no | — | no (E4) |
 
 Parámetros avanzados (con valor por defecto, editables en un panel plegable):
 `velocidad_hormiga` (5 – 40 u/s, 20), `capacidad_carga` (1 – 255, 5),
 `salidas_por_paso` (1 – 100, 5), `pasos_evasion` (5), `pasos_seguimiento` (100),
 `energia_max` (100), consumo por paso (0.1), `umbral_regreso` (30),
-recuperación por paso (2). Fijos: `dt` = 0.1 s, mundo de 1000 × 700.
+recuperación por paso (2). Desde E4: constantes de los congruenciales (`congruencial_a`, `_c`,
+`_m`, `multiplicativo_a`, `_m`) y de las feromonas (`deposito_feromona` 2, `evaporacion_feromona`
+0.01, `umbral_feromona` 0.5, `angulo_sensor` 45°, `distancia_sensor` 10, `giro_feromona` 15°).
+Fijos: `dt` = 0.1 s, mundo de 1000 × 700.
 
 ## 7. Decisiones de diseño incorporadas
 

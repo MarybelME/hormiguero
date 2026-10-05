@@ -2,20 +2,23 @@
 // El servidor es la única fuente de verdad: aquí sólo se envían comandos y se dibuja lo recibido.
 
 import {
-  configurarSimulacion, controlar, obtenerEstado, obtenerParametros, obtenerSalud, vistaPreviaAleatorios,
+  configurarSimulacion, controlar, descargarCsv, obtenerEstado, obtenerParametros, obtenerSalud,
+  vistaPreviaAleatorios,
 } from "./api.js";
 import { prepararBitacora, prepararRegistro } from "./bitacora.js";
 import {
-  construirFormulario, fijarValores, fijarVelocidadVisible, leerParametros, mostrarEstadoControlador, prepararBotones,
-  prepararVelocidad,
+  construirFormulario, fijarValores, fijarVelocidadVisible, leerConstantesGenerador, leerParametros,
+  mostrarEstadoControlador, prepararBotones, prepararVelocidad,
 } from "./controles.js";
 import { mostrarEstadisticas, prepararEstadisticas, vaciarEstadisticas } from "./estadisticas.js";
+import { prepararExperimentos } from "./experimentos.js";
+import { prepararLaboratorio } from "./laboratorio.js";
 import { mostrarHormiga, vaciarPanel } from "./panelDidactico.js";
 import { ESTADOS } from "./protocolo.js";
 import {
-  coordenadasMundo, dibujarCapaDinamica, dibujarCapaEstatica, hormigaMasCercana, limpiarCanvas,
+  coordenadasMundo, dibujarCapaDinamica, dibujarCapaEstatica, dibujarFeromonas, hormigaMasCercana, limpiarCanvas,
 } from "./render.js";
-import { mostrarTabla, resumen } from "./tablaAleatorios.js";
+import { explicacionMetodo, mostrarTabla, resumen } from "./tablaAleatorios.js";
 import { conectar, enviar } from "./ws.js";
 
 const DISTANCIA_CLIC = 12; // unidades del mundo alrededor del clic para elegir una hormiga
@@ -24,6 +27,7 @@ const $ = (id) => document.getElementById(id);
 const estadoServidor = $("estado-servidor");
 const capaEstatica = $("capa-estatica");
 const capaDinamica = $("capa-dinamica");
+const capaFeromonas = $("capa-feromonas");
 const mensajeSimulacion = $("mensaje-simulacion");
 const formularioParametros = $("formulario-parametros");
 const mensajeParametros = $("mensaje-parametros");
@@ -57,6 +61,7 @@ function alRecibirMundo(datos) {
   capaDinamica.height = datos.mundo.alto; // cambiar el tamaño borra el canvas: se redibuja
   vista.cuadroPendiente = true;
   dibujarCapaEstatica(capaEstatica, datos.mundo);
+  limpiarCanvas(capaFeromonas); // si la corrida nueva no tiene feromonas, no queda el rastro viejo
   const g = datos.mundo.generacion;
   avisar(mensajeSimulacion,
     `Semillas: MUNDO = ${datos.semillas.MUNDO}, COMPORTAMIENTO = ${datos.semillas.COMPORTAMIENTO}. ` +
@@ -74,6 +79,7 @@ function alRecibirControl(datos) {
     vista.cuadro = null;
     deseleccionar();
     limpiarCanvas(capaEstatica);
+    limpiarCanvas(capaFeromonas);
     limpiarCanvas(capaDinamica);
     vaciarEstadisticas();
     bitacora.fijarHayMundo(false);
@@ -105,6 +111,10 @@ function alRecibirMensaje(mensaje) {
       break;
     case "error": avisar(mensajeSimulacion, mensaje.mensaje, true); break;
   }
+}
+
+function alRecibirFeromonas(campo) {
+  if (vista.mundo) dibujarFeromonas(capaFeromonas, vista.mundo, campo);
 }
 
 function alRecibirCuadro(cuadro) {
@@ -182,7 +192,7 @@ async function cargarDemo() {
   fijarVelocidadVisible(vista.valoresDemo.pasos_por_segundo);
   await aplicarParametros();
   alRecibirControl(await controlar("iniciar"));
-  avisar(mensajeParametros, "Simulación demo: 3 000 hormigas, fuentes pequeñas que se agotan y p = 0.5. Haz clic en una hormiga para seguirla.");
+  avisar(mensajeParametros, "Simulación demo: 3 000 hormigas, fuentes pequeñas que se agotan, p = 0.5 y feromonas (rastro rosa). Haz clic en una hormiga para seguirla.");
 }
 
 function alError(error) {
@@ -209,13 +219,18 @@ function prepararLeyendaEstados() {
   }
 }
 
-// --- Vista previa del generador (etapa E1) -----------------------------------------------
+// --- Tabla paso a paso del generador y laboratorio ---------------------------------------
 
 const formularioGenerador = $("formulario-generador");
 
 async function generarTabla(evento) {
   evento?.preventDefault();
+  const generador = formularioGenerador.generador.value;
+  $("explicacion-generador").textContent = explicacionMetodo(generador);
   const solicitud = {
+    // a, c y m vienen del panel de parámetros; D y la semilla, de este formulario.
+    ...leerConstantesGenerador(formularioParametros),
+    generador,
     semilla: Number(formularioGenerador.semilla.value),
     digitos: Number(formularioGenerador.digitos.value),
     cantidad: Number(formularioGenerador.cantidad.value),
@@ -230,6 +245,53 @@ async function generarTabla(evento) {
 }
 
 formularioGenerador.addEventListener("submit", generarTabla);
+formularioGenerador.generador.addEventListener("change", generarTabla);
+
+function prepararGeneradores(nombres) {
+  for (const [metodo, nombre] of Object.entries(nombres)) {
+    formularioGenerador.generador.append(new Option(nombre, metodo));
+  }
+  prepararLaboratorio({
+    formulario: $("formulario-laboratorio"),
+    casillas: $("casillas-generadores"),
+    resultados: $("resultados-laboratorio"),
+    mensaje: $("mensaje-laboratorio"),
+    botonCsv: $("boton-csv-laboratorio"),
+    nombres,
+    leerConstantes: () => leerConstantesGenerador(formularioParametros),
+  });
+}
+
+// --- Exportar a CSV y experimentos -------------------------------------------------------
+
+function prepararDescarga(boton, ruta, mensaje, textoEspera) {
+  boton.addEventListener("click", async () => {
+    boton.disabled = true;
+    avisar(mensaje, textoEspera);
+    try {
+      avisar(mensaje, `Descargado ${await descargarCsv(ruta)}.`);
+    } catch (error) {
+      avisar(mensaje, error.message, true);
+    } finally {
+      boton.disabled = false;
+    }
+  });
+}
+
+prepararDescarga($("boton-csv-series"), "/api/exportar/series.csv", mensajeSimulacion, "Preparando las series…");
+prepararDescarga($("boton-csv-bitacora"), "/api/exportar/bitacora.csv", $("mensaje-csv-bitacora"),
+  "Re-ejecutando la corrida desde t = 0 para obtener todos los eventos…");
+prepararDescarga($("boton-csv-registro"), "/api/exportar/registro.csv", $("mensaje-csv-registro"),
+  "Re-ejecutando la corrida desde t = 0 para obtener todos los números…");
+
+prepararExperimentos({
+  formulario: $("formulario-experimentos"),
+  mensaje: $("mensaje-experimentos"),
+  resultados: $("resultados-experimentos"),
+  botonCancelar: $("boton-cancelar-lote"),
+  botonCsv: $("boton-csv-lote"),
+  leerParametros: () => leerParametros(formularioParametros),
+});
 
 // --- Arranque ----------------------------------------------------------------------------
 
@@ -241,17 +303,18 @@ async function iniciarPagina() {
   prepararBotones(alAccion, alError);
   prepararVelocidad(alError);
   mostrarEstadoControlador("vacio", 30);
-  generarTabla();
 
   try {
     const salud = await obtenerSalud();
     textoServidor = `Servidor en línea · v${salud.version}`;
     estadoServidor.textContent = textoServidor;
     estadoServidor.className = "estado-servidor ok";
-    const { valores, demo, esquema } = await obtenerParametros();
+    const { valores, demo, esquema, generadores } = await obtenerParametros();
     vista.valoresDefecto = valores;
     vista.valoresDemo = demo;
-    construirFormulario(formularioParametros, esquema, valores);
+    construirFormulario(formularioParametros, esquema, valores, generadores);
+    prepararGeneradores(generadores);
+    generarTabla();
     // La simulación es compartida: si ya existe una corrida, no se reemplaza al abrir la página.
     const estado = await obtenerEstado();
     if (estado.estado_controlador === "vacio") await aplicarParametros();
@@ -263,6 +326,7 @@ async function iniciarPagina() {
 
   conectar({
     cuadro: alRecibirCuadro,
+    feromonas: alRecibirFeromonas,
     mensaje: alRecibirMensaje,
     conexion: (conectado) => {
       estadoServidor.textContent = conectado ? textoServidor : `${textoServidor} · tiempo real desconectado (reintentando)`;

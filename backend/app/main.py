@@ -15,9 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 
 from app import __version__
+from app.api.rutas_experimentacion import router as router_experimentacion
 from app.api.rutas_rest import router as router_rest
 from app.api.ws import router as router_ws
 from app.servicio.controlador import ControladorSimulacion
+from app.servicio.experimentos import ControladorExperimento
 
 CARPETA_FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
@@ -40,6 +42,7 @@ class FrontendSinCache(StaticFiles):
 async def ciclo_de_vida(aplicacion: FastAPI) -> AsyncIterator[None]:
     yield
     await aplicacion.state.controlador.detener()  # al apagar, se detiene el bucle
+    await aplicacion.state.experimento.detener()   # y se cancela el lote en curso
 
 
 app = FastAPI(
@@ -50,7 +53,9 @@ app = FastAPI(
 )
 # Una sola simulación compartida por todos los clientes (DISENO.md, decisión m).
 app.state.controlador = ControladorSimulacion()
+app.state.experimento = ControladorExperimento()
 app.include_router(router_rest)
+app.include_router(router_experimentacion)
 app.include_router(router_ws)
 # Se monta al final para que las rutas /api tengan prioridad sobre los archivos estáticos.
 app.mount("/", FrontendSinCache(directory=CARPETA_FRONTEND, html=True), name="frontend")

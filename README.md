@@ -7,6 +7,8 @@ aleatorias y la generación de números pseudoaleatorios.
 - Especificación: [docs/ESPECIFICACION_v2.md](docs/ESPECIFICACION_v2.md)
 - Diseño: [docs/DISENO.md](docs/DISENO.md)
 - Avance por etapa: [docs/PROGRESO.md](docs/PROGRESO.md)
+- Guía para usarlo en clase: [docs/guia_docente.md](docs/guia_docente.md)
+- Clonar y ejecutar en otra PC: [PROGRESS.md](PROGRESS.md)
 
 ## Requisitos
 
@@ -35,4 +37,11 @@ Abrir <http://127.0.0.1:8000>. La documentación interactiva de la API está en
 
 ```powershell
 pytest backend/tests -q
+```
+
+## Scripts sin servidor
+
+```powershell
+python backend/scripts/benchmark.py                 # pasos por segundo (añadir --feromonas)
+python backend/scripts/experimento_lote.py --replicas 10 --pasos 1000 --csv lote.csv
 ```

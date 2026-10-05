@@ -4,24 +4,23 @@ La capa web sólo traduce peticiones HTTP a llamadas del núcleo y valida la ent
 Pydantic; no contiene lógica de simulación.
 """
 
+import io
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field, model_validator
+from starlette.responses import Response
+from pydantic import BaseModel, Field
 
 from app import __version__
-from app.config import PARAMETROS_DEMO, ParametrosSimulacion
-from app.aleatorio.cuadrados_medios import (
-    DIGITOS_POR_DEFECTO,
-    PASO_RESIEMBRA,
-    GeneradorCuadradosMedios,
-    PasoCuadradosMedios,
-    TipoDegeneracion,
-    validar_configuracion,
-)
+from app.config import PARAMETROS_DEMO, ParametrosGenerador, ParametrosSimulacion
+from app.aleatorio.base import PASO_RESIEMBRA
+from app.aleatorio.fabrica import GENERADORES, crear_generador
+from app.aleatorio.laboratorio import evaluar_generador
+from app.aleatorio.pruebas_estadisticas import ALFA_POR_DEFECTO
 from app.aleatorio.variables import angulo
+from app.estadisticas.exportar import escribir_laboratorio
 from app.eventos.bitacora import Evento
 from app.eventos.tipos import TipoEvento
 from app.modelo.generacion_mundo import ErrorGeneracionMundo
@@ -30,6 +29,10 @@ from app.servicio.controlador import AccionInvalida, ControladorSimulacion
 
 CANTIDAD_POR_DEFECTO = 20
 CANTIDAD_MAXIMA_VISTA_PREVIA = 1000  # filas que la tabla didáctica puede mostrar a la vez
+CANTIDAD_MINIMA_PRUEBAS = 10
+CANTIDAD_MAXIMA_PRUEBAS = 100_000    # números por generador en el laboratorio
+INTERVALOS_MAXIMOS = 100
+GENERADORES_MAXIMOS = len(GENERADORES)
 
 router = APIRouter(prefix="/api")
 
@@ -39,71 +42,23 @@ class RespuestaSalud(BaseModel):
     version: str
 
 
-class SolicitudVistaPrevia(BaseModel):
-    """Configuración del generador para calcular una tabla paso a paso."""
+class SolicitudVistaPrevia(ParametrosGenerador):
+    """Generador para calcular una tabla paso a paso (cualquier método)."""
 
-    generador: Literal["cuadrados_medios"] = "cuadrados_medios"
-    semilla: int = Field(description="Semilla inicial, 1 ≤ semilla < 10^digitos")
-    digitos: Literal[4, 6, 8] = Field(DIGITOS_POR_DEFECTO, description="Dígitos D del método")
     cantidad: int = Field(
         CANTIDAD_POR_DEFECTO, ge=1, le=CANTIDAD_MAXIMA_VISTA_PREVIA,
         description="Cuántos números generar",
     )
 
-    @model_validator(mode="after")
-    def _validar_semilla(self) -> "SolicitudVistaPrevia":
-        validar_configuracion(self.semilla, self.digitos)
-        return self
 
+class SolicitudPruebas(BaseModel):
+    """Laboratorio: varios generadores, cada uno con su semilla, y las mismas pruebas."""
 
-class DegeneracionVista(BaseModel):
-    tipo: TipoDegeneracion
-    estado: int
-    longitud_ciclo: int | None
-    numero_resiembra: int
-    semilla_nueva: int
-
-
-class FilaVistaPrevia(BaseModel):
-    """Una fila de la tabla: semilla → cuadrado → relleno → centrales → u."""
-
-    indice: int
-    previo: int
-    cuadrado: int
-    relleno: str
-    centrales: str
-    u: float
-    angulo: float
-    degeneracion: DegeneracionVista | None
-
-
-class RespuestaVistaPrevia(BaseModel):
-    generador: str
-    semilla: int
-    digitos: int
-    paso_resiembra: int
-    filas: list[FilaVistaPrevia]
-    resiembras: int
-
-
-def _fila(paso: PasoCuadradosMedios) -> FilaVistaPrevia:
-    degeneracion = paso.degeneracion
-    return FilaVistaPrevia(
-        indice=paso.indice,
-        previo=paso.previo,
-        cuadrado=paso.cuadrado,
-        relleno=paso.relleno,
-        centrales=paso.centrales,
-        u=paso.u,
-        angulo=angulo(paso.u),
-        degeneracion=None if degeneracion is None else DegeneracionVista(
-            tipo=degeneracion.tipo,
-            estado=degeneracion.estado,
-            longitud_ciclo=degeneracion.longitud_ciclo,
-            numero_resiembra=degeneracion.numero_resiembra,
-            semilla_nueva=degeneracion.semilla_nueva,
-        ),
-    )
+    generadores: list[ParametrosGenerador] = Field(min_length=1, max_length=GENERADORES_MAXIMOS)
+    cantidad: int = Field(1000, ge=CANTIDAD_MINIMA_PRUEBAS, le=CANTIDAD_MAXIMA_PRUEBAS,
+                          description="Números por generador")
+    intervalos: int = Field(10, ge=2, le=INTERVALOS_MAXIMOS, description="Intervalos k de la prueba χ²")
+    alfa: Literal[0.01, 0.05, 0.1] = Field(ALFA_POR_DEFECTO, description="Nivel de significancia")
 
 
 @router.get("/salud", response_model=RespuestaSalud)
@@ -112,19 +67,49 @@ def salud() -> RespuestaSalud:
     return RespuestaSalud(estado="ok", version=__version__)
 
 
-@router.post("/aleatorio/vista-previa", response_model=RespuestaVistaPrevia)
-def vista_previa(solicitud: SolicitudVistaPrevia) -> RespuestaVistaPrevia:
-    """Tabla paso a paso del generador. Usa un generador temporal: no toca la simulación."""
-    generador = GeneradorCuadradosMedios(solicitud.semilla, solicitud.digitos)
-    filas = [_fila(generador.siguiente_paso()) for _ in range(solicitud.cantidad)]
-    return RespuestaVistaPrevia(
-        generador=generador.nombre,
-        semilla=solicitud.semilla,
-        digitos=solicitud.digitos,
-        paso_resiembra=PASO_RESIEMBRA,
-        filas=filas,
-        resiembras=generador.resiembras,
-    )
+@router.post("/aleatorio/vista-previa")
+def vista_previa(solicitud: SolicitudVistaPrevia) -> dict[str, Any]:
+    """Tabla paso a paso del generador. Usa un generador temporal: no toca la simulación.
+
+    Cada fila es el cálculo completo del número (`estado_interno` del generador, que indica
+    su `metodo`) más la dirección u · 360° que tomaría una hormiga.
+    """
+    generador = crear_generador(solicitud.configuracion_generador, solicitud.semilla)
+    filas = []
+    for _ in range(solicitud.cantidad):
+        u = generador.siguiente()
+        filas.append({**generador.estado_interno(), "u": u, "angulo": angulo(u)})
+    return {
+        "generador": generador.nombre,
+        "metodo": solicitud.generador,
+        "semilla": solicitud.semilla,
+        "digitos": solicitud.digitos,
+        "modulo": generador.modulo,
+        "paso_resiembra": PASO_RESIEMBRA,
+        "filas": filas,
+        "resiembras": generador.resiembras,
+    }
+
+
+@router.post("/aleatorio/pruebas")
+def pruebas(solicitud: SolicitudPruebas) -> dict[str, Any]:
+    """Pruebas de uniformidad (χ², K-S) e independencia (corridas) para comparar generadores."""
+    resultados = [
+        evaluar_generador(g.configuracion_generador, g.semilla, solicitud.cantidad,
+                          solicitud.intervalos, solicitud.alfa)
+        for g in solicitud.generadores
+    ]
+    return {"cantidad": solicitud.cantidad, "intervalos": solicitud.intervalos,
+            "alfa": solicitud.alfa, "resultados": resultados}
+
+
+@router.post("/aleatorio/pruebas.csv")
+def pruebas_csv(solicitud: SolicitudPruebas) -> Response:
+    """El mismo informe comparativo de generadores, como CSV para una hoja de cálculo."""
+    destino = io.StringIO()
+    escribir_laboratorio(destino, pruebas(solicitud))
+    return Response(destino.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="comparacion_generadores.csv"'})
 
 
 # --- Simulación: configuración, control y consultas ---------------------------------------
@@ -172,6 +157,7 @@ def parametros() -> dict[str, Any]:
     return {
         "valores": ParametrosSimulacion().model_dump(),
         "demo": PARAMETROS_DEMO.model_dump(),
+        "generadores": {nombre: tipo.nombre for nombre, tipo in GENERADORES.items()},
         "esquema": ParametrosSimulacion.model_json_schema(),
     }
 

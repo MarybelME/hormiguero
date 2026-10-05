@@ -23,32 +23,25 @@ estados vistos.
 """
 
 from dataclasses import asdict, dataclass
-from enum import Enum
 from typing import Any
 
-from app.aleatorio.base import GeneradorPseudoaleatorio
+from app.aleatorio.base import (
+    PASO_RESIEMBRA,
+    Degeneracion,
+    GeneradorPseudoaleatorio,
+    TipoDegeneracion,
+    calcular_resiembra,
+)
 
+__all__ = [
+    "DIGITOS_PERMITIDOS", "DIGITOS_POR_DEFECTO", "PASO_RESIEMBRA", "Degeneracion",
+    "GeneradorCuadradosMedios", "PasoCuadradosMedios", "TipoDegeneracion",
+    "calcular_centrales", "validar_configuracion",
+]
+
+METODO = "cuadrados_medios"
 DIGITOS_PERMITIDOS = (4, 6, 8)
 DIGITOS_POR_DEFECTO = 4
-PASO_RESIEMBRA = 7919  # número primo: desplaza la semilla lejos de la anterior
-
-
-class TipoDegeneracion(str, Enum):
-    """Formas en que cuadrados medios deja de servir."""
-
-    CERO = "CERO"    # cayó en 0: desde ahí sólo produciría ceros
-    CICLO = "CICLO"  # repitió un estado: desde ahí repetiría la misma sucesión
-
-
-@dataclass(frozen=True)
-class Degeneracion:
-    """Qué degeneró y cómo se corrigió."""
-
-    tipo: TipoDegeneracion
-    estado: int                 # valor de x que reveló la degeneración
-    longitud_ciclo: int | None  # sólo para CICLO
-    numero_resiembra: int       # k usado en la fórmula
-    semilla_nueva: int
 
 
 @dataclass(frozen=True)
@@ -106,6 +99,11 @@ class GeneradorCuadradosMedios(GeneradorPseudoaleatorio):
         return self._digitos
 
     @property
+    def modulo(self) -> int:
+        """10^D: los estados posibles van de 0 a 10^D − 1."""
+        return self._modulo
+
+    @property
     def resiembras(self) -> int:
         """Cuántas veces se ha re-sembrado desde el inicio."""
         return self._resiembras
@@ -126,7 +124,7 @@ class GeneradorCuadradosMedios(GeneradorPseudoaleatorio):
         return self.siguiente_paso().u
 
     def estado_interno(self) -> dict[str, Any]:
-        datos: dict[str, Any] = {"estado_actual": self._x, "digitos": self._digitos}
+        datos: dict[str, Any] = {"metodo": METODO, "estado_actual": self._x, "digitos": self._digitos}
         if self._ultimo is not None:
             datos.update(asdict(self._ultimo))
         return datos
@@ -175,12 +173,7 @@ class GeneradorCuadradosMedios(GeneradorPseudoaleatorio):
 
     def _calcular_resiembra(self, estado_degenerado: int) -> tuple[int, int]:
         """Aplica la regla (semilla + k · PASO_RESIEMBRA) mod 10^D con el siguiente k válido."""
-        k = self._k
-        while True:
-            k += 1
-            nueva = (self._semilla + k * PASO_RESIEMBRA) % self._modulo
-            if nueva not in (0, estado_degenerado):
-                return k, nueva
+        return calcular_resiembra(self._semilla, self._k, self._modulo, estado_degenerado)
 
     def _resembrar(self, degeneracion: Degeneracion) -> None:
         self._k = degeneracion.numero_resiembra

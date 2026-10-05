@@ -22,6 +22,7 @@ function leerColores() {
     fuente: leer("--mundo-fuente"),
     texto: leer("--mundo-texto"),
     seleccion: leer("--mundo-seleccion"),
+    feromona: leer("--mundo-feromona"),
     estados: ESTADOS.map((e) => leer(`--estado-${e.codigo}`)),
   };
 }
@@ -81,6 +82,43 @@ export function dibujarCapaEstatica(canvas, mundo) {
   ctx.fillStyle = c.nido;
   circulo(ctx, nido.x, yCanvas(nido.y), nido.radio);
   ctx.fill();
+}
+
+// Capa de feromonas: una celda del campo = un píxel de una imagen pequeña que se escala al
+// tamaño del mundo. La opacidad de cada celda es su concentración (0–255).
+const lienzoFeromonas = document.createElement("canvas");
+
+function colorRgb(color) {
+  const muestra = document.createElement("canvas").getContext("2d");
+  muestra.fillStyle = color;
+  muestra.fillRect(0, 0, 1, 1);
+  return muestra.getImageData(0, 0, 1, 1).data;
+}
+
+export function dibujarFeromonas(canvas, mundo, campo) {
+  canvas.width = mundo.ancho;
+  canvas.height = mundo.alto;
+  const { columnas, filas, valores } = campo;
+  lienzoFeromonas.width = columnas;
+  lienzoFeromonas.height = filas;
+  const contexto = lienzoFeromonas.getContext("2d");
+  const imagen = contexto.createImageData(columnas, filas);
+  const [r, g, b] = colorRgb(colores().feromona);
+  for (let fila = 0; fila < filas; fila++) {
+    const destino = (filas - 1 - fila) * columnas; // la fila 0 del campo es la parte baja del mundo
+    for (let col = 0; col < columnas; col++) {
+      const k = 4 * (destino + col);
+      imagen.data[k] = r;
+      imagen.data[k + 1] = g;
+      imagen.data[k + 2] = b;
+      imagen.data[k + 3] = valores[fila * columnas + col];
+    }
+  }
+  contexto.putImageData(imagen, 0, 0);
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(lienzoFeromonas, 0, 0, columnas * campo.tamanoCelda, filas * campo.tamanoCelda);
 }
 
 export function limpiarCanvas(canvas) {

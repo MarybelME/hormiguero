@@ -33,6 +33,7 @@ class Estadisticas:
     fuentes_agotadas: int = 0
     decisiones_seguir: int = 0        # entradas al radio de la reina evaluadas
     seguimientos: int = 0             # de ellas, cuántas decidieron seguirla
+    giros_feromona: int = 0           # correcciones de rumbo por feromona (no son eventos)
     conteo_estados: np.ndarray = field(default_factory=_conteo_vacio)
 
     def actualizar_conteo(self, estados: np.ndarray) -> None:

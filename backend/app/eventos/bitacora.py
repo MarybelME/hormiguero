@@ -6,6 +6,7 @@ la hormiga involucrada y el número pseudoaleatorio usado (si lo hubo).
 """
 
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,8 +38,10 @@ class Bitacora:
     seguir disponible.
     """
 
-    def __init__(self, capacidad: int = CAPACIDAD_BITACORA) -> None:
+    def __init__(self, capacidad: int = CAPACIDAD_BITACORA,
+                 al_registrar: Callable[[Evento], None] | None = None) -> None:
         self._eventos: deque[Evento] = deque(maxlen=capacidad)
+        self._al_registrar = al_registrar  # aviso opcional (p. ej. para exportar a CSV)
         self._por_hormiga: dict[int, deque[Evento]] = {}
         self._total = 0
 
@@ -55,6 +58,8 @@ class Bitacora:
             if historia is None:
                 historia = self._por_hormiga[evento.id_hormiga] = deque(maxlen=EVENTOS_POR_HORMIGA)
             historia.append(evento)
+        if self._al_registrar is not None:
+            self._al_registrar(evento)
 
     def ultimos(self, limite: int) -> list[Evento]:
         """Devuelve los `limite` eventos más recientes, del más viejo al más nuevo."""

@@ -12,16 +12,24 @@ parámetros ⇒ misma simulación.
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
 
 from app import config
-from app.aleatorio.cuadrados_medios import GeneradorCuadradosMedios
-from app.aleatorio.registro import CAPACIDAD_REGISTRO, RegistroAleatorio
+from app.aleatorio.fabrica import crear_generador
+from app.aleatorio.registro import CAPACIDAD_REGISTRO, EntradaRegistro, RegistroAleatorio
 from app.aleatorio.servicio import Flujo, ServicioAleatorio
 from app.comportamiento.buscando import detectar_alimento
 from app.comportamiento.en_nido import salidas_del_nido
 from app.comportamiento.energia import actualizar_energia
+from app.comportamiento.feromonas import (
+    CLAVE_CAMPO,
+    depositar_feromonas,
+    evaporar_feromonas,
+    orientar_por_feromonas,
+    vista_sensores,
+)
 from app.comportamiento.evitando import terminar_evasiones
 from app.comportamiento.movimiento import aplicar_movimiento, proponer_movimiento
 from app.comportamiento.regresando import detectar_llegada_nido
@@ -35,7 +43,8 @@ from app.comportamiento.transportando import orientar_al_nido
 from app.config import ParametrosSimulacion
 from app.espacial.colisiones import resolver_colisiones
 from app.estadisticas.contadores import Estadisticas
-from app.eventos.bitacora import CAPACIDAD_BITACORA, Bitacora
+from app.estadisticas.series import SeriesEstadisticas
+from app.eventos.bitacora import CAPACIDAD_BITACORA, Bitacora, Evento
 from app.eventos.prediccion import predecir
 from app.modelo.generacion_mundo import generar_mundo
 from app.modelo.mundo import Mundo
@@ -50,26 +59,34 @@ class Simulacion:
         parametros: ParametrosSimulacion,
         capacidad_registro: int = CAPACIDAD_REGISTRO,
         capacidad_bitacora: int = CAPACIDAD_BITACORA,
+        al_generar_numero: Callable[[EntradaRegistro], None] | None = None,
+        al_registrar_evento: Callable[[Evento], None] | None = None,
     ) -> None:
+        """`al_generar_numero` y `al_registrar_evento` son avisos opcionales por cada número y
+        cada evento (los usa la exportación del registro completo); no alteran la simulación."""
         self.parametros = parametros
         self.dt = config.DT
         self._capacidad_registro = capacidad_registro
         self._capacidad_bitacora = capacidad_bitacora
+        self._al_generar_numero = al_generar_numero
+        self._al_registrar_evento = al_registrar_evento
         self._construir()
 
     def _construir(self) -> None:
         p = self.parametros
-        self.bitacora = Bitacora(self._capacidad_bitacora)
+        self.bitacora = Bitacora(self._capacidad_bitacora, self._al_registrar_evento)
         self.aleatorio = ServicioAleatorio(
-            GeneradorCuadradosMedios(p.semilla, p.digitos),
-            GeneradorCuadradosMedios(p.semilla_comportamiento, p.digitos),
-            registro=RegistroAleatorio(self._capacidad_registro),
+            crear_generador(p.configuracion_generador, p.semilla),
+            crear_generador(p.configuracion_generador, p.semilla_comportamiento),
+            registro=RegistroAleatorio(self._capacidad_registro, self._al_generar_numero),
             bitacora=self.bitacora,
         )
         self.estadisticas = Estadisticas()
         self.tick = 0
         self.mundo: Mundo = generar_mundo(p, self.aleatorio)
         self.estadisticas.actualizar_conteo(self.mundo.hormigas.estado)
+        self.series = SeriesEstadisticas()
+        self.series.registrar(self.resumen())
 
     @property
     def tiempo(self) -> float:
@@ -94,15 +111,20 @@ class Simulacion:
         actualizar_energia(ctx)                                 # 3
         orientar_al_nido(ctx)                                   # 4 rumbos
         orientar_hacia_reina(ctx)
+        orientar_por_feromonas(ctx)
         moviles, x_nueva, y_nueva = proponer_movimiento(ctx)    # 5
         bloqueadas = resolver_colisiones(ctx, moviles, x_nueva, y_nueva)  # 6
         aplicar_movimiento(ctx, moviles & ~bloqueadas, x_nueva, y_nueva)  # 7
+        depositar_feromonas(ctx)                                # 7b rastro de las que llevan comida
         detectar_alimento(ctx)                                  # 8 eventos espaciales
         detectar_llegada_nido(ctx)
         detectar_radio_reina(ctx)
         terminar_evasiones(ctx)                                 # 9 cuentas regresivas
         terminar_seguimientos(ctx)
+        evaporar_feromonas(ctx)                                 # 9b el campo se evapora
         self.estadisticas.actualizar_conteo(self.mundo.hormigas.estado)  # 10
+        if self.series.toca_muestra(self.tick):
+            self.series.registrar(self.resumen())
 
     def avanzar(self, pasos: int) -> None:
         for _ in range(pasos):
@@ -125,8 +147,14 @@ class Simulacion:
             resiembras={flujo.value: self.aleatorio.degeneraciones(flujo) for flujo in Flujo},
             alimento_en_nido=self.mundo.nido.alimento_almacenado,
             alimento_por_fuente=[f.cantidad for f in self.mundo.fuentes],
+            feromona_total=self.feromonas.total() if self.feromonas is not None else None,
         )
         return datos
+
+    @property
+    def feromonas(self):
+        """El campo de feromonas, o None si están desactivadas."""
+        return self.mundo.campos.get(CLAVE_CAMPO)
 
     def vista_hormiga(self, id_hormiga: int) -> dict[str, Any]:
         """Todo lo que el modo didáctico muestra de una hormiga (no modifica nada).
@@ -150,5 +178,11 @@ class Simulacion:
             "descripcion": prediccion.descripcion,
             "aleatorio": prediccion.aleatorio,
         }
+        if self.feromonas is not None:
+            datos["feromonas"] = vista_sensores(self.feromonas, self.parametros,
+                                                datos["x"], datos["y"], datos["dir"])
+            if datos["estado"] == "BUSCANDO_COMIDA":
+                datos["siguiente_evento"]["descripcion"] += (
+                    " Si sus sensores detectan feromona, puede desviarse de esta trayectoria.")
         datos["tick"] = self.tick
         return datos

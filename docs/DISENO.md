@@ -423,19 +423,22 @@ paso():
     1. mover_reina(ctx)
     2. salidas_del_nido(ctx)          # pocas hormigas por paso, en orden de id
     3. actualizar_energia(ctx)        # vectorizado
-    4. calcular_rumbos(ctx)           # vectorizado: TRANSPORTANDO/REGRESANDO apuntan al nido
+    4. calcular_rumbos(ctx)           # vectorizado: TRANSPORTANDO/REGRESANDO apuntan al nido;
+                                      # SIGUIENDO apunta a la reina; BUSCANDO sigue feromonas (E4)
     5. proponer_movimiento(ctx)       # vectorizado: x', y' = x + vel·dt·cos(dir), ...
     6. resolver_colisiones(ctx)       # rejilla; las bloqueadas no se mueven y cambian dirección
     7. aplicar_movimiento(ctx)        # sólo las no bloqueadas
+   7b. depositar_feromonas(ctx)       # E4: las que llevan comida dejan rastro
     8. detectar_eventos_espaciales(ctx)  # alimento, nido, radio de la reina
     9. avanzar_contadores(ctx)        # pasos_restantes, FIN_EVASION, FIN_SEGUIMIENTO
-   10. estadisticas.actualizar(ctx)
+   9b. evaporar_feromonas(ctx)        # E4: c ← c · (1 − ρ)
+   10. estadisticas.actualizar(ctx)   # y, cada 10 pasos, una muestra de las series (E4)
     tick ← tick + 1
 ```
 
 El `ContextoPaso` es el objeto que reciben todas las reglas de comportamiento; desde la
 etapa E2 incluye `campos` (vacío) para que en la etapa E4 la regla de búsqueda pueda consultar
-`ctx.campos["feromonas"].muestrear(x, y)` sin cambiar firmas.
+`ctx.campos["feromonas"].muestrear(x, y)` sin cambiar firmas. Así se hizo en E4 (§10.10).
 
 ### 10.4 Movimiento (vectorizado)
 
@@ -541,6 +544,23 @@ seleccionar una hormiga cambiaría la simulación y rompería la reproducibilida
 cuando el próximo evento es aleatorio, se informa como *posible* con su probabilidad. La
 prueba de determinismo incluirá una corrida "con hormiga seleccionada" contra una sin selección.
 
+### 10.10 Feromonas (E4, decisión o)
+
+```
+campo: rejilla de 200 × 140 celdas de 5 unidades (CampoFeromonas), sólo si feromonas_activas
+en cada paso, dentro del orden fijo de §10.3:
+    fase 4 (rumbos): para cada hormiga BUSCANDO_COMIDA
+        leer sensores a distancia_sensor: izquierda (dir + angulo_sensor), frente, derecha (dir − angulo_sensor)
+        m = máx(izq, frente, der)
+        si m ≥ umbral y frente < m: dir += ± giro_feromona hacia el lado mayor (empate → izquierda)
+    fase 7b (tras moverse): cada TRANSPORTANDO_COMIDA suma deposito_feromona en su celda (tope FEROMONA_MAXIMA)
+    fase 9b: c ← c · (1 − evaporacion_feromona); c < FEROMONA_MINIMA → 0
+```
+
+No consume números pseudoaleatorios: con la misma semilla las rutas se forman igual. El giro es
+una corrección continua del rumbo (como volver al nido): no es un evento de la bitácora, pero
+se cuenta en `giros_feromona`. Sin depósitos, una celda decae como `c₀ (1 − ρ)^k`.
+
 ---
 
 ## 11. Estructura de carpetas
@@ -555,26 +575,28 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 │   ├── requirements.txt
 │   ├── app/
 │   │   ├── main.py, config.py
-│   │   ├── api/            rutas_rest.py, ws.py, protocolo.py
-│   │   ├── servicio/       controlador.py
+│   │   ├── api/            rutas_rest.py, rutas_experimentacion.py, ws.py, protocolo.py
+│   │   ├── servicio/       controlador.py, experimentos.py
 │   │   ├── nucleo/         simulacion.py, contexto.py
 │   │   ├── modelo/         mundo.py, hormigas.py, reina.py, nido.py, alimento.py,
-│   │   │                   obstaculos.py, estados.py, generacion_mundo.py
+│   │   │                   obstaculos.py, estados.py, generacion_mundo.py, feromonas.py
 │   │   ├── comportamiento/ en_nido.py, buscando.py, siguiendo_reina.py, evitando.py,
 │   │   │                   transportando.py, regresando.py, reina.py, transiciones.py,
-│   │   │                   energia.py, movimiento.py
+│   │   │                   energia.py, movimiento.py, feromonas.py
 │   │   ├── espacial/       rejilla.py, colisiones.py
-│   │   ├── aleatorio/      base.py, cuadrados_medios.py, congruencial.py, servicio.py,
-│   │   │                   registro.py, variables.py, pruebas_estadisticas.py
+│   │   ├── aleatorio/      base.py, cuadrados_medios.py, congruencial.py, numpy_referencia.py,
+│   │   │                   fabrica.py, servicio.py, registro.py, variables.py,
+│   │   │                   pruebas_estadisticas.py, laboratorio.py
 │   │   ├── eventos/        tipos.py, bitacora.py, prediccion.py
-│   │   └── estadisticas/   contadores.py, series.py, exportar.py
+│   │   └── estadisticas/   contadores.py, series.py, exportar.py, replicas.py
 │   ├── scripts/            benchmark.py, experimento_lote.py
 │   └── tests/              test_<módulo>.py (una por módulo del núcleo + api)
 └── frontend/
     ├── index.html
     ├── css/estilos.css
     └── js/  main.js, api.js, ws.js, protocolo.js, render.js, controles.js,
-             estadisticas.js, panelDidactico.js, bitacora.js, tablaAleatorios.js
+             estadisticas.js, panelDidactico.js, bitacora.js, tablaAleatorios.js,
+             laboratorio.js, experimentos.js
 ```
 
 | Cambio | Justificación |
@@ -586,7 +608,14 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | `comportamiento/` con un archivo por estado + `reina.py` + `transiciones.py` | Cada regla se explica en clase como "el comportamiento de la entidad en ese estado". |
 | `aleatorio/variables.py` | Mapeos puros (`angulo`, `bernoulli`, `uniforme`) separados de los generadores, como pide la sección 6 de CLAUDE.md. |
 | `frontend/js/bitacora.js` | Tablas de la bitácora filtrable y del registro de números de la corrida (E3); separa esas tablas del panel de la hormiga seleccionada. |
-| `frontend/js/tablaAleatorios.js` | Vista de tabla paso a paso de la etapa E1 (semilla → cuadrado → relleno → centrales → u). |
+| `frontend/js/tablaAleatorios.js` | Vista de tabla paso a paso (E1) y, desde E4, cómo se presenta el cálculo de cada método en la tabla, el registro y el panel. |
+| `aleatorio/fabrica.py` (E4) | Registro de generadores: el modelo pide "un generador" y la fábrica decide cuál (RF-16). |
+| `aleatorio/numpy_referencia.py` (E4) | Único archivo que usa `numpy.random`, como generador de referencia (decisión r). |
+| `aleatorio/laboratorio.py` (E4) | Muestra de cada generador + las tres pruebas, para comparar métodos. |
+| `estadisticas/replicas.py` (E4) | Núcleo del lote de réplicas; lo usan el script y la interfaz. |
+| `api/rutas_experimentacion.py`, `servicio/experimentos.py` (E4) | Exportación CSV y lote en segundo plano, separados de las rutas de la simulación en vivo. |
+| `modelo/feromonas.py` + `comportamiento/feromonas.py` (E4) | El campo (variable de estado del entorno) separado de la regla que lo usa. |
+| `frontend/js/laboratorio.js`, `experimentos.js` (E4) | Paneles del laboratorio de generadores y de las réplicas por lote. |
 
 ---
 
@@ -597,8 +626,10 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | Método | Ruta | Cuerpo | Respuesta | Etapa |
 |---|---|---|---|---|
 | GET | `/api/salud` | — | `{"estado": "ok", "version": "0.1.0"}` | E1 |
-| GET | `/api/parametros` | — | Valores por defecto + esquema con descripción, unidad y rango | E2 |
-| POST | `/api/aleatorio/vista-previa` | `{generador, semilla, digitos, cantidad}` | Tabla paso a paso + degeneraciones detectadas (no toca la simulación) | E1 |
+| GET | `/api/parametros` | — | Valores por defecto, demo, nombres de los generadores y esquema con descripción, unidad y rango | E2 / E4 |
+| POST | `/api/aleatorio/vista-previa` | `{generador, semilla, digitos, congruencial_*, multiplicativo_*, cantidad}` | Tabla paso a paso (cálculo de cada número según su `metodo`) + degeneraciones (no toca la simulación) | E1 / E4 |
+| POST | `/api/aleatorio/pruebas` | `{generadores: [...], cantidad, intervalos, alfa}` | Por generador: re-siembras, media, varianza, histograma y las pruebas χ², K-S y corridas | E4 |
+| POST | `/api/aleatorio/pruebas.csv` | igual | El informe comparativo en CSV | E4 |
 | POST | `/api/simulacion/configurar` | `ParametrosSimulacion` | `{mundo: capa estática}`; 422 si es inválido | E2 / E3 |
 | GET | `/api/mundo` | — | Capa estática: dimensiones, nido, rocas, fuentes (con cantidad) | E2 |
 | POST | `/api/simulacion/iniciar` | — | `{estado_controlador: "corriendo"}`; 409 si el estado no lo permite | E3 |
@@ -610,8 +641,13 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 | GET | `/api/hormigas/{id}` | — | Vista didáctica: atributos, último `u` con su cálculo, último evento, siguiente evento previsto | E3 |
 | GET | `/api/eventos?id_hormiga=&tipo=&limite=` | — | Últimas entradas de la bitácora (y catálogo de tipos); por hormiga, sus últimos 50 eventos | E3 |
 | GET | `/api/aleatorio/registro?desde=&limite=` | — | Página del búfer circular de números | E3 (el núcleo lo ofrece desde E1) |
-| GET | `/api/aleatorio/registro.csv` | — | Registro completo en CSV | E4 |
-| POST | `/api/experimentos/lote` | parámetros + réplicas | Resultados agregados | E4 |
+| GET | `/api/exportar/{registro,bitacora,series}.csv` | — | CSV completo de la corrida hasta el paso actual; registro y bitácora re-ejecutan la corrida (decisión p) | E4 |
+| POST | `/api/experimentos` | `{parametros, replicas ≤ 30, pasos ≤ 5000, semilla_inicial?}` | Lanza el lote en segundo plano; 409 si ya hay uno, 422 si excede el presupuesto | E4 |
+| GET | `/api/experimentos` | — | `{estado, hechas, total, error, resultado}` (réplicas + resumen con IC 95 %) | E4 |
+| POST | `/api/experimentos/cancelar` | — | Detiene el lote tras la réplica en curso | E4 |
+| GET | `/api/experimentos/resultado.csv` | — | Réplicas y resumen en CSV | E4 |
+
+Formato de todos los CSV (decisión s): `;`, coma decimal, UTF-8 con BOM, encabezados en español.
 
 ### 12.2 WebSocket `/ws/simulacion`
 
@@ -619,7 +655,8 @@ Hormiguero Web/                 # raíz real del proyecto (CLAUDE.md la llama ho
 
 | Mensaje | Formato | Frecuencia |
 |---|---|---|
-| Cuadro de hormigas | binario (abajo) | ≤ 30 por segundo |
+| Cuadro de hormigas | binario tipo 1 (abajo) | ≤ 30 por segundo |
+| Campo de feromonas | binario tipo 2 (abajo) | ~4 por segundo, sólo con feromonas activas (E4) |
 | `{"tipo": "estadisticas", ...}` | texto JSON: contadores, conteos por estado, cantidad por fuente, t | ~4 por segundo |
 | `{"tipo": "mundo", ...}` | texto JSON: capa estática | al configurar y al agotarse una fuente |
 | `{"tipo": "seleccion", ...}` | texto JSON: vista didáctica de la hormiga seleccionada | ~4 por segundo mientras haya selección |
@@ -656,6 +693,24 @@ El encabezado mide 24 bytes (múltiplo de 4) para que `x` e `y` se lean con
 2×2 px no se ve; la de la hormiga seleccionada llega en el mensaje `seleccion`.
 `api/protocolo.py` y `frontend/js/protocolo.js` implementan este formato y una prueba
 verifica byte a byte lo que empaqueta el backend.
+
+**Mensaje binario tipo 2: campo de feromonas (E4, little-endian).** El byte 1 distingue el
+tipo; el cliente decide cómo leer el mensaje con él.
+
+| Desplazamiento (bytes) | Tamaño | Tipo | Campo |
+|---|---|---|---|
+| 0 | 1 | `uint8` | `version` = 1 |
+| 1 | 1 | `uint8` | `tipo_mensaje` = 2 (FEROMONAS) |
+| 2 | 2 | `uint16` | `columnas` |
+| 4 | 4 | `uint32` | `tick` |
+| 8 | 2 | `uint16` | `filas` |
+| 10 | 2 | `uint16` | reservado = 0 |
+| 12 | 4 | `float32` | `tamano_celda` |
+| 16 | 4 | `float32` | `concentracion_maxima` (corresponde a 255) |
+| 20 | filas·columnas | `uint8[]` | concentración cuantizada, fila por fila; fila 0 = y pequeña |
+| **Total** | **20 + filas·columnas** | | 28 020 bytes con 200 × 140 celdas |
+
+Como el cuadro, se guarda sólo el más reciente por cliente.
 
 ### 12.3 Secuencia: iniciar simulación
 
@@ -859,9 +914,16 @@ mensaje de commit) se hacen por etapa, como indica `CLAUDE.md`.
 | `GENERADOR_DEGENERADO` | `aleatorio/` + `eventos/` | Periodo y degeneración de un generador |
 | `pruebas_estadisticas.py` | `aleatorio/` | Pruebas de uniformidad e independencia |
 | `Estadisticas`, series | `estadisticas/` | Variables de salida / medidas de desempeño |
-| Réplicas por lote | `scripts/experimento_lote.py` | Experimentación (réplicas, semillas distintas) |
+| Réplicas por lote | `scripts/experimento_lote.py`, panel "Experimentos" | Experimentación (réplicas, semillas distintas) |
 | Rejilla espacial | `espacial/rejilla.py` | (Técnica de implementación, no concepto del modelo) |
-| `CampoFeromonas` (etapa E4) | `modelo/` | Variable de estado del entorno (campo) |
+| `CampoFeromonas` | `modelo/feromonas.py` | Variable de estado del entorno (campo) |
+| Sensores y depósito | `comportamiento/feromonas.py` | Regla local y comportamiento emergente |
+| `GeneradorCongruencial`, `…Multiplicativo` | `aleatorio/congruencial.py` | Método congruencial; periodo |
+| `GeneradorNumpy` | `aleatorio/numpy_referencia.py` | Generador de referencia |
+| `GENERADORES` | `aleatorio/fabrica.py` | Intercambiabilidad del generador |
+| `SeriesEstadisticas` | `estadisticas/series.py` | Variables de salida en el tiempo |
+| Exportación CSV | `estadisticas/exportar.py` | Salida para análisis; reproducibilidad (re-ejecución) |
+| `ejecutar_lote`, IC con t de Student | `estadisticas/replicas.py` | Réplicas independientes e intervalos de confianza |
 
 ---
 
@@ -886,6 +948,11 @@ recomendación (**R**); abajo se conservan las opciones consideradas como regist
 | l | Reina y rocas (E2) | Zona de patrulla libre de rocas y fuentes; si la reina va a salir de ella, gira hacia el nido sin consumir `u` |
 | m | Varios clientes (E3) | Una sola simulación compartida por todas las pestañas; la selección de hormiga es propia de cada pestaña |
 | n | Parámetros en vivo (E3) | Sólo la velocidad cambia en vivo; cualquier otro parámetro requiere "Aplicar" (corrida nueva en t = 0) |
+| o | Uso de las feromonas (E4) | Sensores deterministas (izquierda, frente, derecha); no consumen números |
+| p | Exportar el registro completo (E4) | Re-ejecutar la corrida desde t = 0 en un objeto aparte y escribir el CSV |
+| q | Réplicas por lote (E4) | Script `experimento_lote.py` y panel web "Experimentos" |
+| r | Parámetros de los congruenciales (E4) | `a`, `c` y `m` configurables en "Avanzados", con valores clásicos por defecto |
+| s | Formato de los CSV (E4) | Para Excel en español: separador `;`, coma decimal, UTF-8 con BOM |
 
 ### a) Política ante la degeneración de cuadrados medios
 
@@ -1055,3 +1122,65 @@ tiene la suya (no altera la simulación).
    no se describe con un solo juego de parámetros.
 
 **Elegida: opción 1.**
+
+### o) Uso de las feromonas (resuelta al iniciar E4)
+
+1. **Sensores deterministas**: tres sensores (izquierda, frente, derecha) leen el campo delante
+   de la hormiga que busca; si alguno supera el umbral, gira hacia el mayor. No consume números:
+   el `u` sigue explicando sólo colisiones y decisiones, y no se acelera la degeneración.
+2. Ruleta aleatoria proporcional a la concentración (transformada inversa discreta). Muy
+   didáctica, pero consume un `u` por hormiga y por paso.
+3. Giro proporcional al gradiente. Suave, pero sin evento claro que explicar.
+
+**Elegida: opción 1.**
+
+### p) Exportar el registro completo (resuelta al iniciar E4)
+
+1. **Re-ejecutar la corrida**: al exportar se repite la corrida desde t = 0 hasta el paso
+   actual en un objeto aparte (no toca la simulación en vivo) y se escribe todo al CSV.
+   Demuestra la reproducibilidad.
+2. Escribir a disco durante la corrida (E/S en cada paso).
+3. Exportar sólo el búfer (no cumple "registro completo").
+
+**Elegida: opción 1.**
+
+### q) Réplicas por lote (resuelta al iniciar E4)
+
+1. **Script y panel web**: `scripts/experimento_lote.py` y un panel "Experimentos" que corre
+   el lote en un hilo aparte con límites, y muestra media, desviación e IC 95 %.
+2. Sólo el script.
+
+**Elegida: opción 1.**
+
+### r) Parámetros de los generadores congruenciales (resuelta al iniciar E4)
+
+1. **Configurables** (`congruencial_a`, `congruencial_c`, `congruencial_m`,
+   `multiplicativo_a`, `multiplicativo_m`) con valores clásicos por defecto: lineal de ANSI C
+   (`a = 1103515245`, `c = 12345`, `m = 2^31`) y multiplicativo de Park y Miller
+   (`a = 16807`, `m = 2^31 − 1`). Permite mostrar que un mal `a`, `c` o `m` da periodos cortos.
+2. Constantes fijas.
+
+**Elegida: opción 1.** Detalles aprobados con el plan de E4:
+- Se exige `mcd(a, m) = 1`. Así la fórmula es una biyección: la sucesión es un ciclo puro y la
+  primera repetición es siempre la semilla (o la última semilla de re-siembra). La
+  degeneración de un congruencial es **completar el periodo**; se detecta en O(1), se registra
+  como `GENERADOR_DEGENERADO` (tipo `CICLO`, con la longitud del periodo) y se re-siembra con
+  la misma regla de la decisión a, módulo `m`. Con periodo completo la re-siembra sólo cambia el
+  punto de partida dentro del mismo ciclo: el periodo es un límite del método.
+- La regla k se generaliza a cualquier generador: `semilla_comportamiento = (semilla + m/2) mod m`
+  (1 si da 0), donde `m` es el módulo del generador (`10^D` en cuadrados medios, `2^32` para
+  NumPy). Para cuadrados medios da lo mismo que antes.
+- El generador de NumPy (PCG64) es la "referencia" que permite `CLAUDE.md` §6: `numpy.random`
+  se usa **sólo** en `aleatorio/numpy_referencia.py`, detrás de la misma interfaz y con
+  registro; la prueba de independencia del núcleo lo verifica. Nunca degenera en una corrida.
+
+### s) Formato de los CSV exportados (resuelta durante E4)
+
+1. **Excel en español**: separador `;`, coma decimal (`0,8902`) y UTF-8 con BOM. Se abre con
+   doble clic en Excel configurado en español; en Python se lee con `sep=";", decimal=","`.
+2. Estándar internacional (`,` y punto decimal): cómodo para Python o R, pero en Excel en
+   español todo cae en una columna.
+3. Elegir el formato al descargar.
+
+**Elegida: opción 1.**
+

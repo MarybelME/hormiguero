@@ -7,6 +7,7 @@ mientras dure la corrida, así que siempre se sabe cuántos números se han gene
 """
 
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,8 +32,11 @@ class EntradaRegistro:
 class RegistroAleatorio:
     """Búfer circular de entradas con índice global continuo."""
 
-    def __init__(self, capacidad: int = CAPACIDAD_REGISTRO) -> None:
+    def __init__(self, capacidad: int = CAPACIDAD_REGISTRO,
+                 al_agregar: Callable[[EntradaRegistro], None] | None = None) -> None:
         self._entradas: deque[EntradaRegistro] = deque(maxlen=capacidad)
+        # Aviso opcional por cada entrada (p. ej. para escribir el registro completo a CSV).
+        self._al_agregar = al_agregar
         self._total = 0
         # Último número de cada hormiga: aunque salga del búfer, el modo didáctico puede
         # mostrar con qué número tomó su última decisión.
@@ -59,6 +63,8 @@ class RegistroAleatorio:
         self._total += 1
         if entrada.id_hormiga >= 0:
             self._ultimo_por_hormiga[entrada.id_hormiga] = entrada
+        if self._al_agregar is not None:
+            self._al_agregar(entrada)
 
     def ultimo_de(self, id_hormiga: int) -> EntradaRegistro | None:
         """El último número que usó esa hormiga (siempre disponible, aunque ya no esté en el búfer)."""

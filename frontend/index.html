@@ -22,7 +22,7 @@
         <button id="boton-pausar" type="button">⏸ Pausar</button>
         <button id="boton-reiniciar" type="button" title="Vuelve a t = 0 con la misma configuración: la corrida se repite idéntica">↺ Reiniciar</button>
         <button id="boton-limpiar" type="button" class="secundario" title="Borra mundo, hormigas, registros y estadísticas">Limpiar</button>
-        <button id="boton-demo" type="button" class="secundario" title="Carga parámetros de demostración (3 000 hormigas, fuentes pequeñas, p = 0.5) y la inicia">★ Simulación demo</button>
+        <button id="boton-demo" type="button" class="secundario" title="Carga parámetros de demostración (3 000 hormigas, fuentes pequeñas, p = 0.5, feromonas) y la inicia">★ Simulación demo</button>
         <label class="control-velocidad">Velocidad
           <input id="rango-velocidad" type="range" min="1" max="1000" value="30">
           <input id="campo-velocidad" type="number" min="1" max="1000" value="30">
@@ -36,8 +36,10 @@
         <div>
           <div class="contenedor-canvas">
             <!-- Capa estática: zona de patrulla, nido, rocas y alimento (se redibuja sólo al cambiar).
+                 Capa de feromonas: el campo, ~4 veces por segundo (sólo si están activas).
                  Capa dinámica: hormigas, reina y hormiga seleccionada (cada cuadro). -->
             <canvas id="capa-estatica" width="1000" height="700"></canvas>
+            <canvas id="capa-feromonas" width="1000" height="700"></canvas>
             <canvas id="capa-dinamica" width="1000" height="700"></canvas>
           </div>
           <p class="ayuda">Haz clic sobre una hormiga para seguirla en el panel didáctico.</p>
@@ -47,6 +49,7 @@
             <li><span class="muestra patrulla"></span>Zona de patrulla</li>
             <li><span class="muestra roca"></span>Roca (restricción)</li>
             <li><span class="muestra fuente"></span>Fuente de alimento (recurso)</li>
+            <li><span class="muestra feromona"></span>Feromona (campo del entorno)</li>
           </ul>
           <ul class="leyenda" id="leyenda-estados" aria-label="Estados de las hormigas"></ul>
         </div>
@@ -55,6 +58,8 @@
           <section aria-labelledby="titulo-estadisticas">
             <h3 id="titulo-estadisticas">Estadísticas en vivo (variables de estado)</h3>
             <dl id="estadisticas" class="estadisticas"></dl>
+            <button id="boton-csv-series" type="button" class="secundario"
+                    title="Una fila por segundo simulado con las variables de salida">Descargar series (CSV)</button>
           </section>
 
           <section aria-labelledby="titulo-didactico">
@@ -90,6 +95,35 @@
       <p id="mensaje-parametros" class="mensaje" role="status"></p>
     </section>
 
+    <!-- Experimentos: réplicas por lote con los parámetros del formulario -->
+    <section class="panel" aria-labelledby="titulo-experimentos">
+      <h2 id="titulo-experimentos">Experimentos (réplicas por lote)</h2>
+      <p class="explicacion">
+        Una corrida es una sola observación de un sistema aleatorio. Para estimar una medida de
+        desempeño se repite la corrida con semillas distintas (semilla inicial, +1, +2, …) y
+        todo lo demás igual, y se calcula la media con su intervalo de confianza del 95 %:
+        <code>media ± t<sub>0.975, n−1</sub> · s / √n</code>. Usa los parámetros del panel de
+        arriba, aunque no se hayan aplicado. Corre en segundo plano: la simulación en vivo sigue,
+        más lenta. Para lotes grandes, usa <code>backend/scripts/experimento_lote.py</code>.
+      </p>
+      <form id="formulario-experimentos" class="formulario">
+        <label>Réplicas
+          <input name="replicas" type="number" min="2" max="30" value="10" required>
+        </label>
+        <label>Pasos por réplica
+          <input name="pasos" type="number" min="10" max="5000" value="1000" required>
+        </label>
+        <label>Semilla inicial
+          <input name="semilla_inicial" type="number" min="1" placeholder="la de los parámetros">
+        </label>
+        <button type="submit">Ejecutar lote</button>
+        <button id="boton-cancelar-lote" type="button" class="secundario" disabled>Cancelar</button>
+        <button id="boton-csv-lote" type="button" class="secundario" disabled>Descargar resultados (CSV)</button>
+      </form>
+      <p id="mensaje-experimentos" class="mensaje" role="status"></p>
+      <div id="resultados-experimentos"></div>
+    </section>
+
     <!-- Bitácora de eventos -->
     <section class="panel" aria-labelledby="titulo-bitacora">
       <h2 id="titulo-bitacora">Bitácora de eventos</h2>
@@ -105,7 +139,10 @@
         </label>
         <button type="submit">Actualizar</button>
         <label class="casilla"><input name="automatico" type="checkbox" checked> Actualizar cada segundo</label>
+        <button id="boton-csv-bitacora" type="button" class="secundario"
+                title="Re-ejecuta la corrida desde t = 0 para obtener todos los eventos">Descargar bitácora completa (CSV)</button>
       </form>
+      <p id="mensaje-csv-bitacora" class="mensaje" role="status"></p>
       <p id="mensaje-bitacora" class="mensaje" role="status"></p>
       <div class="contenedor-tabla">
         <table id="tabla-bitacora" class="tabla-datos">
@@ -129,14 +166,22 @@
         </label>
         <button type="submit">Actualizar</button>
         <label class="casilla"><input name="automatico" type="checkbox"> Actualizar cada segundo</label>
+        <button id="boton-csv-registro" type="button" class="secundario"
+                title="Re-ejecuta la corrida desde t = 0 para obtener todos los números">Descargar registro completo (CSV)</button>
       </form>
+      <p class="ayuda">
+        En memoria sólo se guardan los números más recientes. El CSV completo se obtiene
+        <strong>re-ejecutando la corrida</strong> desde t = 0 con la misma semilla: sale idéntica,
+        que es justamente lo que significa que la simulación sea reproducible.
+      </p>
+      <p id="mensaje-csv-registro" class="mensaje" role="status"></p>
       <p id="mensaje-registro" class="mensaje" role="status"></p>
       <div class="contenedor-tabla">
         <table id="tabla-registro" class="tabla-datos tabla-aleatorios">
           <thead>
             <tr>
               <th>Índice</th><th>Flujo</th><th class="izquierda">Propósito</th><th>Hormiga</th><th>Tick</th>
-              <th>x<sub>i</sub></th><th>x<sub>i</sub>²</th><th>Relleno</th><th>Centrales</th><th>u</th>
+              <th>x<sub>i</sub></th><th>Cálculo</th><th>x<sub>i+1</sub></th><th>u</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -144,29 +189,31 @@
       </div>
     </section>
 
-    <!-- Vista previa del generador (etapa E1): independiente de la simulación -->
+    <!-- Tabla paso a paso de un generador: independiente de la simulación -->
     <section class="panel" aria-labelledby="titulo-generador">
-      <h2 id="titulo-generador">Generador de números pseudoaleatorios: cuadrados medios</h2>
+      <h2 id="titulo-generador">Generador de números pseudoaleatorios: tabla paso a paso</h2>
       <p class="explicacion">
-        Se eleva al cuadrado el número, se completa con ceros a la izquierda hasta 2D dígitos
-        y se toman los D dígitos del centro: ese es el nuevo número, y
-        <code>u = x / 10<sup>D</sup></code>. La dirección de una hormiga sería
-        <code>u × 360°</code>. Esta tabla usa un generador aparte: no altera la simulación.
+        <span id="explicacion-generador"></span>
+        La dirección de una hormiga sería <code>u × 360°</code>. Esta tabla usa un generador aparte:
+        no altera la simulación. Las constantes a, c y m se toman de los parámetros avanzados.
       </p>
 
       <form id="formulario-generador" class="formulario">
+        <label>Método
+          <select name="generador"></select>
+        </label>
         <label>Semilla
-          <input id="campo-semilla" name="semilla" type="number" min="1" value="5735" required>
+          <input name="semilla" type="number" min="1" value="5735" required>
         </label>
         <label>Dígitos (D)
-          <select id="campo-digitos" name="digitos">
+          <select name="digitos">
             <option value="4" selected>4</option>
             <option value="6">6</option>
             <option value="8">8</option>
           </select>
         </label>
         <label>Cantidad
-          <input id="campo-cantidad" name="cantidad" type="number" min="1" max="1000" value="20" required>
+          <input name="cantidad" type="number" min="1" max="1000" value="20" required>
         </label>
         <button type="submit">Generar</button>
       </form>
@@ -174,20 +221,48 @@
       <p id="mensaje-generador" class="mensaje" role="status"></p>
       <div class="contenedor-tabla">
         <table id="tabla-aleatorios" class="tabla-aleatorios">
-          <thead>
-            <tr>
-              <th>i</th>
-              <th>x<sub>i</sub> (semilla)</th>
-              <th>x<sub>i</sub>²</th>
-              <th>Relleno a 2D dígitos</th>
-              <th>Centrales</th>
-              <th>u<sub>i</sub></th>
-              <th>Dirección = u·360°</th>
-            </tr>
-          </thead>
+          <thead></thead>
           <tbody></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Laboratorio: pruebas de uniformidad e independencia para comparar generadores -->
+    <section class="panel" aria-labelledby="titulo-laboratorio">
+      <h2 id="titulo-laboratorio">Laboratorio de generadores (pruebas estadísticas)</h2>
+      <p class="explicacion">
+        Cada generador produce n números con la misma semilla (re-siembras incluidas, tal como los
+        usaría el modelo) y se someten a tres pruebas de hipótesis: χ² y Kolmogórov-Smirnov
+        (H<sub>0</sub>: los números son uniformes en [0, 1)) y corridas arriba y abajo
+        (H<sub>0</sub>: los números son independientes). Se rechaza H<sub>0</sub> si el
+        estadístico supera el valor crítico, es decir, si el valor p es menor que α.
+      </p>
+      <form id="formulario-laboratorio" class="formulario">
+        <fieldset class="grupo-casillas">
+          <legend>Generadores</legend>
+          <div id="casillas-generadores"></div>
+        </fieldset>
+        <label>Semilla
+          <input name="semilla" type="number" min="1" value="5735" required>
+        </label>
+        <label>Números (n)
+          <input name="cantidad" type="number" min="10" max="100000" value="1000" required>
+        </label>
+        <label>Intervalos χ² (k)
+          <input name="intervalos" type="number" min="2" max="100" value="10" required>
+        </label>
+        <label>α
+          <select name="alfa">
+            <option value="0.01">0.01</option>
+            <option value="0.05" selected>0.05</option>
+            <option value="0.1">0.10</option>
+          </select>
+        </label>
+        <button type="submit">Comparar</button>
+        <button id="boton-csv-laboratorio" type="button" class="secundario">Descargar informe (CSV)</button>
+      </form>
+      <p id="mensaje-laboratorio" class="mensaje" role="status"></p>
+      <div id="resultados-laboratorio" class="resultados-laboratorio"></div>
     </section>
   </main>
 

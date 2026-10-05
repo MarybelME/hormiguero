@@ -21,13 +21,15 @@ Formato versión 1, little-endian:
     24 + 8n         n       uint8[n]    estado (códigos EstadoHormiga)
     total: 24 + 9n bytes
 
-`frontend/js/protocolo.js` lee exactamente este formato.
+`frontend/js/protocolo.js` lee exactamente este formato. Al final del archivo está el
+mensaje tipo 2 (campo de feromonas).
 """
 
 import struct
 
 import numpy as np
 
+from app.modelo.feromonas import CampoFeromonas
 from app.modelo.mundo import Mundo
 
 VERSION_PROTOCOLO = 1
@@ -69,4 +71,47 @@ def desempaquetar_cuadro(datos: bytes) -> dict:
         "x": np.frombuffer(datos, "<f4", n, TAMANO_ENCABEZADO),
         "y": np.frombuffer(datos, "<f4", n, inicio_y),
         "estado": np.frombuffer(datos, np.uint8, n, inicio_estado),
+    }
+
+
+# --- Mensaje de feromonas (tipo 2) ----------------------------------------------------------
+#
+# Campo de feromonas cuantizado, unas 4 veces por segundo y sólo si están activas:
+#
+#     desplazamiento  tamaño  tipo        campo
+#     0               1       uint8       version = 1
+#     1               1       uint8       tipo_mensaje = 2 (FEROMONAS)
+#     2               2       uint16      columnas
+#     4               4       uint32      tick
+#     8               2       uint16      filas
+#     10              2       uint16      reservado = 0
+#     12              4       float32     tamano_celda (unidades de longitud)
+#     16              4       float32     concentracion_maxima (la que corresponde a 255)
+#     20              filas·columnas  uint8  concentración por celda, fila por fila;
+#                                            fila 0 = y pequeña (parte baja del mundo)
+#     total: 20 + filas·columnas bytes
+
+TIPO_FEROMONAS = 2
+FORMATO_FEROMONAS = "<BBHIHHff"
+TAMANO_ENCABEZADO_FEROMONAS = struct.calcsize(FORMATO_FEROMONAS)  # 20 bytes
+
+
+def empaquetar_feromonas(tick: int, campo: CampoFeromonas) -> bytes:
+    encabezado = struct.pack(
+        FORMATO_FEROMONAS, VERSION_PROTOCOLO, TIPO_FEROMONAS, campo.columnas,
+        tick, campo.filas, 0, campo.tamano_celda, float(campo.maxima),
+    )
+    return encabezado + campo.cuantizado().tobytes()
+
+
+def desempaquetar_feromonas(datos: bytes) -> dict:
+    """Inverso de `empaquetar_feromonas` (para pruebas)."""
+    version, tipo, columnas, tick, filas, _, celda, maxima = struct.unpack_from(FORMATO_FEROMONAS, datos)
+    if len(datos) != TAMANO_ENCABEZADO_FEROMONAS + filas * columnas:
+        raise ValueError(f"el mensaje de feromonas mide {len(datos)} bytes")
+    valores = np.frombuffer(datos, np.uint8, filas * columnas, TAMANO_ENCABEZADO_FEROMONAS)
+    return {
+        "version": version, "tipo_mensaje": tipo, "tick": tick, "filas": filas,
+        "columnas": columnas, "tamano_celda": celda, "maxima": maxima,
+        "valores": valores.reshape(filas, columnas),
     }

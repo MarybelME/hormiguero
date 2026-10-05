@@ -9,7 +9,45 @@ sólo debe implementar esta interfaz; el modelo no cambia.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any
+
+PASO_RESIEMBRA = 7919  # número primo: desplaza la semilla lejos de la anterior
+
+
+class TipoDegeneracion(str, Enum):
+    """Formas en que un generador deja de servir."""
+
+    CERO = "CERO"    # cayó en 0: desde ahí sólo produciría ceros
+    CICLO = "CICLO"  # repitió un estado: desde ahí repetiría la misma sucesión
+
+
+@dataclass(frozen=True)
+class Degeneracion:
+    """Qué degeneró y cómo se corrigió."""
+
+    tipo: TipoDegeneracion
+    estado: int                 # valor de x que reveló la degeneración
+    longitud_ciclo: int | None  # sólo para CICLO
+    numero_resiembra: int       # k usado en la fórmula
+    semilla_nueva: int
+
+
+def calcular_resiembra(semilla_original: int, k_anterior: int, modulo: int,
+                       estado_degenerado: int) -> tuple[int, int]:
+    """Regla de re-siembra visible (DISENO.md, decisión a), común a todos los generadores:
+
+        nueva_semilla = (semilla_original + k · PASO_RESIEMBRA) mod m
+
+    con el primer k > k_anterior cuyo resultado no sea 0 ni el estado que degeneró.
+    Devuelve (k, nueva_semilla).
+    """
+    for k in range(k_anterior + 1, k_anterior + 1 + 2 * modulo):
+        nueva = (semilla_original + k * PASO_RESIEMBRA) % modulo
+        if nueva not in (0, estado_degenerado):
+            return k, nueva
+    raise ValueError(f"no hay semilla de re-siembra válida con módulo {modulo}")
 
 
 class GeneradorPseudoaleatorio(ABC):
@@ -24,6 +62,11 @@ class GeneradorPseudoaleatorio(ABC):
     @abstractmethod
     def semilla(self) -> int:
         """Semilla original con la que se configuró el generador."""
+
+    @property
+    @abstractmethod
+    def modulo(self) -> int:
+        """Cantidad de estados posibles m: el estado vive en [0, m). Da la escala de la semilla."""
 
     @abstractmethod
     def siguiente(self) -> float:
@@ -40,3 +83,8 @@ class GeneradorPseudoaleatorio(ABC):
     @abstractmethod
     def degenerado(self) -> bool:
         """True si el último número producido reveló una degeneración (cero o ciclo)."""
+
+    @property
+    def resiembras(self) -> int:
+        """Veces que se re-sembró desde el inicio (0 si el método nunca degenera)."""
+        return 0

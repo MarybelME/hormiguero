@@ -109,9 +109,9 @@ determinismo, uso del ServicioAleatorio, nombres del glosario y ausencia de núm
 Lista lo que no cumple y corrígelo.
 ```
 
-**Verificación de rendimiento (etapas 4 a 6)**
+**Verificación de rendimiento (etapas E2 a E4)**
 ```
-Ejecuta backend/scripts/benchmark.py con 1 000, 5 000 y 20 000 hormigas. Reporta pasos por segundo,
+Ejecuta backend/scripts/benchmark.py (y con --feromonas) para 1 000, 5 000 y 20 000 hormigas. Reporta pasos por segundo,
 tamaño del cuadro enviado y, si no se alcanza la meta de CLAUDE.md, perfila y propón optimizaciones
 antes de aplicarlas.
 ```

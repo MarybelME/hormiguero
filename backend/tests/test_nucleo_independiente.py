@@ -8,6 +8,8 @@ import pytest
 CARPETA_APP = Path(__file__).resolve().parents[1] / "app"
 CAPA_WEB = {"api", "servicio"}  # además de main.py
 MODULOS_WEB = {"fastapi", "starlette", "uvicorn"}
+# Única excepción permitida (CLAUDE.md §6, DISENO.md decisión r): el generador de referencia.
+GENERADOR_DE_REFERENCIA = Path("aleatorio") / "numpy_referencia.py"
 
 
 def archivos_del_nucleo() -> list[Path]:
@@ -42,4 +44,15 @@ def test_el_nucleo_no_usa_generadores_del_lenguaje(ruta: Path) -> None:
     """Todo número aleatorio sale de un generador configurado (CLAUDE.md §6)."""
     importados = modulos_importados(ruta)
     assert "random" not in importados
-    assert "numpy.random" not in ruta.read_text(encoding="utf-8")
+    if ruta.relative_to(CARPETA_APP) != GENERADOR_DE_REFERENCIA:
+        assert "np.random" not in ruta.read_text(encoding="utf-8")
+        assert "numpy.random" not in ruta.read_text(encoding="utf-8")
+
+
+def test_el_generador_de_referencia_esta_detras_de_la_interfaz() -> None:
+    """numpy.random sólo aparece en el generador de referencia, que cumple la interfaz común."""
+    from app.aleatorio.base import GeneradorPseudoaleatorio
+    from app.aleatorio.numpy_referencia import GeneradorNumpy
+
+    assert (CARPETA_APP / GENERADOR_DE_REFERENCIA).exists()
+    assert issubclass(GeneradorNumpy, GeneradorPseudoaleatorio)

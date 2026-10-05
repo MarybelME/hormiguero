@@ -16,7 +16,9 @@
 
 export const VERSION_PROTOCOLO = 1;
 export const TIPO_CUADRO = 1;
+export const TIPO_FEROMONAS = 2;
 export const TAMANO_ENCABEZADO = 24;
+export const TAMANO_ENCABEZADO_FEROMONAS = 20;
 
 // Códigos de EstadoHormiga: deben coincidir con backend/app/modelo/estados.py.
 export const ESTADOS = [
@@ -27,6 +29,32 @@ export const ESTADOS = [
   { codigo: 4, nombre: "TRANSPORTANDO_COMIDA", texto: "Transportando comida" },
   { codigo: 5, nombre: "REGRESANDO_AL_NIDO", texto: "Regresando al nido (sin comida)" },
 ];
+
+// Tipo de mensaje binario (byte 1): CUADRO o FEROMONAS.
+export function tipoMensaje(buffer) {
+  return new DataView(buffer).getUint8(1);
+}
+
+// Mensaje tipo 2 (DISENO.md §12.2): campo de feromonas cuantizado a 0–255.
+//   0 uint8 version · 1 uint8 tipo = 2 · 2 uint16 columnas · 4 uint32 tick · 8 uint16 filas
+//   10 uint16 reservado · 12 float32 tamano_celda · 16 float32 concentracion_maxima
+//   20 uint8[filas·columnas] fila por fila; fila 0 = parte baja del mundo (y pequeña)
+export function decodificarFeromonas(buffer) {
+  const vista = new DataView(buffer);
+  const columnas = vista.getUint16(2, true);
+  const filas = vista.getUint16(8, true);
+  if (buffer.byteLength !== TAMANO_ENCABEZADO_FEROMONAS + filas * columnas) {
+    throw new Error(`El mensaje de feromonas mide ${buffer.byteLength} bytes`);
+  }
+  return {
+    tick: vista.getUint32(4, true),
+    columnas,
+    filas,
+    tamanoCelda: vista.getFloat32(12, true),
+    maxima: vista.getFloat32(16, true),
+    valores: new Uint8Array(buffer, TAMANO_ENCABEZADO_FEROMONAS, filas * columnas),
+  };
+}
 
 export function decodificarCuadro(buffer) {
   const vista = new DataView(buffer);

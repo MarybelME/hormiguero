@@ -21,6 +21,7 @@ from app.modelo.estados import EstadoReina
 from app.modelo.hormigas import Hormigas
 from app.modelo.mundo import Mundo
 from app.modelo.nido import Nido
+from app.modelo.feromonas import CampoFeromonas
 from app.modelo.obstaculos import Obstaculo
 from app.modelo.reina import Reina
 
@@ -104,6 +105,12 @@ def generar_mundo(parametros: ParametrosSimulacion, servicio: ServicioAleatorio)
         estado=EstadoReina.PATRULLANDO,
     )
     hormigas = Hormigas(parametros.num_hormigas, nido, parametros.velocidad_hormiga, parametros.energia_max)
+    # Campos del entorno (decisión o): sólo existen si se activan; no consumen números.
+    campos: dict[str, CampoFeromonas] = {}
+    if parametros.feromonas_activas:
+        campos["feromonas"] = CampoFeromonas(config.ANCHO_MUNDO, config.ALTO_MUNDO,
+                                             config.TAMANO_CELDA_FEROMONA,
+                                             config.FEROMONA_MAXIMA, config.FEROMONA_MINIMA)
 
     return Mundo(
         ancho=config.ANCHO_MUNDO,
@@ -114,6 +121,7 @@ def generar_mundo(parametros: ParametrosSimulacion, servicio: ServicioAleatorio)
         obstaculos=obstaculos,
         fuentes=fuentes,
         rejilla=rejilla,
+        campos=campos,
         generacion={
             "candidatos": colocador.candidatos,
             "rechazados": colocador.rechazados,

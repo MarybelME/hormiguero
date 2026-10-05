@@ -18,6 +18,8 @@ const FILAS = [
   ["fuentes", "Alimento en cada fuente", (d) => d.alimento_por_fuente.map((c) => FORMATO.format(c)).join(" · ")],
   ["colisiones", "Colisiones (rocas / borde)", (d) => `${FORMATO.format(d.colisiones)} / ${FORMATO.format(d.colisiones_borde)}`],
   ["cambios", "Cambios de dirección", (d) => FORMATO.format(d.cambios_direccion)],
+  ["feromonas", "Feromonas (giros / total en el campo)", (d) => d.feromona_total === null
+    ? "desactivadas" : `${FORMATO.format(d.giros_feromona)} / ${FORMATO.format(Math.round(d.feromona_total))}`],
   ["seguir", "Decisión de seguir a la reina", describirDecisiones],
   ["numeros", "Números pseudoaleatorios generados", (d) => FORMATO.format(d.numeros_generados)],
   ["resiembras", "Re-siembras (mundo / comportamiento)", (d) => `${d.resiembras.MUNDO} / ${d.resiembras.COMPORTAMIENTO}`],

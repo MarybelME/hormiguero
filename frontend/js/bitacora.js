@@ -2,7 +2,7 @@
 // Ambas tablas se piden por REST: el servidor filtra y pagina; aquí sólo se muestran.
 
 import { obtenerEventos, obtenerRegistro } from "./api.js";
-import { celda, celdaRelleno, rellenarCeros } from "./tablaAleatorios.js";
+import { celda, celdasRegistro, describirDegeneracion } from "./tablaAleatorios.js";
 
 const INTERVALO_AUTOMATICO_MS = 1000;
 const SIN_VALOR = -1; // id de hormiga o índice de número ausente
@@ -36,15 +36,11 @@ function filaRegistro(entrada) {
     celda(entrada.proposito, "izquierda"),
     celda(entrada.id_hormiga === SIN_VALOR ? "—" : entrada.id_hormiga),
     celda(entrada.tick),
-    celda(rellenarCeros(c.previo, c.digitos)),
-    celda(c.cuadrado.toLocaleString("es")),
-    celdaRelleno(c.relleno, c.digitos),
-    celda(c.centrales, "centrales"),
-    celda(entrada.u.toFixed(c.digitos)),
+    ...celdasRegistro(c, entrada.u),
   );
   if (c.degeneracion) {
     tr.className = "degenerado";
-    tr.title = `Degeneró (${c.degeneracion.tipo}); re-siembra con semilla ${c.degeneracion.semilla_nueva}`;
+    tr.title = `${describirDegeneracion(c.degeneracion, c)} Re-siembra con semilla ${c.degeneracion.semilla_nueva}.`;
   }
   return tr;
 }

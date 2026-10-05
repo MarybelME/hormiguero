@@ -5,8 +5,8 @@
 | E0 Análisis y diseño | Terminada |
 | E1 Base y generadores | Terminada |
 | E2 Modelo y motor | Terminada |
-| E3 Tiempo real, interfaz y modo didáctico | Terminada (pendiente de revisión) |
-| E4 Experimentación, feromonas y pulido | Pendiente |
+| E3 Tiempo real, interfaz y modo didáctico | Terminada |
+| E4 Experimentación, feromonas y pulido | Terminada (pendiente de revisión) |
 
 ---
 
@@ -282,3 +282,104 @@ que en E2 por el historial por hormiga.
 7. Poner `p_seguir_reina = 2` saltando la validación del navegador (por ejemplo con
    `/docs`) → el servidor responde 422.
 8. Con 5 000 hormigas, la animación debe verse fluida.
+
+Commit: `6d8bff6 feat: etapa 3 — tiempo real por WebSocket, controles, estadísticas y modo didáctico`.
+
+---
+
+## E4 — Experimentación, feromonas y pulido (2026-10-05)
+
+Requisitos cubiertos: RF-16, RF-60, RF-61, RF-62 y RF-70.
+
+**Qué se hizo**
+- *Hito 4.1 — Generadores y pruebas estadísticas*:
+  - `aleatorio/congruencial.py`: congruencial lineal y multiplicativo (detección del fin de
+    periodo en O(1) y re-siembra visible); `aleatorio/numpy_referencia.py` (PCG64, único uso
+    de `numpy.random`); `aleatorio/fabrica.py` con el registro `GENERADORES`. `TipoDegeneracion`,
+    `Degeneracion` y la regla de re-siembra pasaron a `aleatorio/base.py` (comunes a todos).
+  - `config.py`: `generador` con 4 métodos, `congruencial_a/c/m`, `multiplicativo_a/m`,
+    validación de la semilla según el método y `ParametrosGenerador` (mismo esquema y validación
+    para la vista previa y el laboratorio).
+  - `aleatorio/pruebas_estadisticas.py`: χ², Kolmogórov-Smirnov (Stephens) y corridas arriba y
+    abajo, con valores p propios (gamma incompleta, `erfc`); `aleatorio/laboratorio.py`.
+  - API: vista previa para cualquier método y `POST /api/aleatorio/pruebas` (y `.csv`).
+  - Interfaz: tabla paso a paso con selector de método, panel "Laboratorio de generadores"
+    (tabla comparativa con histogramas), cálculo de cada método en el panel didáctico y en el
+    registro; las constantes de un generador se desactivan si no es el elegido.
+- *Hito 4.2 — Exportación y réplicas*:
+  - `estadisticas/series.py` (una muestra por segundo simulado), `estadisticas/exportar.py`
+    (CSV y re-ejecución de la corrida), `estadisticas/replicas.py` (lote, IC con t de Student),
+    `scripts/experimento_lote.py`.
+  - `RegistroAleatorio` y `Bitacora` aceptan un aviso opcional por entrada (para escribir el CSV
+    mientras se re-ejecuta, sin guardar todo en memoria).
+  - `servicio/experimentos.py` + `api/rutas_experimentacion.py`: exportar registro, bitácora y
+    series; lote en segundo plano con avance, cancelación y presupuesto de trabajo.
+  - Interfaz: botones de descarga y panel "Experimentos" (resumen con IC 95 % y tabla de réplicas).
+- *Hito 4.3 — Feromonas*:
+  - `modelo/feromonas.py` (`CampoFeromonas`: depositar, evaporar, muestrear), creado en
+    `mundo.campos["feromonas"]` sólo si `feromonas_activas`; `comportamiento/feromonas.py`
+    (sensores, depósito y evaporación; fases 4, 7b y 9b del paso). Contador `giros_feromona`.
+  - Protocolo: mensaje binario tipo 2 (campo cuantizado, ~4 por segundo); capa de canvas
+    propia; sensores de la hormiga seleccionada en el panel didáctico. La demo las activa.
+  - `benchmark.py --feromonas`.
+- *Hito 4.4 — Pulido*: `docs/guia_docente.md` (5 sesiones, 13 ejercicios, limitaciones),
+  DISENO.md (§10.3, §10.10, §11, §12.1, §12.2, anexo y decisiones o–s), ESPECIFICACION_v2 §6,
+  README y `PROMPTS_CLAUDE_CODE.md` (numeración de etapas).
+- Pruebas: 342 en total (126 nuevas: `test_congruencial`, `test_pruebas_estadisticas`,
+  `test_fabrica`, `test_experimentacion`, `test_feromonas`). Todas pasan en ~24 s.
+
+**Benchmark** (pasos/s del núcleo, esta máquina):
+
+| Hormigas | Sin feromonas | Con feromonas |
+|---|---|---|
+| 1 000 | 2 234 | 1 678 |
+| 5 000 | 599 | 532 |
+| 20 000 | 190 | 154 |
+
+**Resultados que respaldan los criterios de terminado**
+- Laboratorio (semilla 5735, n = 1000, α = 0.05): cuadrados medios con D = 4 rechaza χ², K-S y
+  corridas (25 re-siembras, 424 números distintos); con D = 6 sólo rechaza corridas; con D = 8,
+  los congruenciales clásicos y NumPy no rechazan ninguna. El informe se descarga en CSV.
+- Feromonas: con la semilla 5735, 3 000 hormigas y `salidas_por_paso = 10`, en 1 000 pasos se
+  recolectan 2 060 unidades sin feromonas y 3 850 con ellas; las rutas se ven en rosa entre el
+  nido y las fuentes y desaparecen cuando una fuente se agota.
+
+**Decisiones tomadas** (detalle en DISENO.md)
+- o) Feromonas con sensores deterministas (no consumen números).
+- p) El registro y la bitácora completos se exportan re-ejecutando la corrida.
+- q) Lotes desde el script y desde un panel web (≤ 30 réplicas, ≤ 5 000 pasos,
+  ≤ 3·10⁸ hormiga-pasos).
+- r) Congruenciales configurables; se exige mcd(a, m) = 1 (ciclo puro: el periodo se detecta al
+  volver a la semilla); `m` ≥ 3 y no múltiplo de 7919 (si no, la re-siembra no avanza).
+  Regla k generalizada a `(semilla + m/2) mod m`. `numpy.random` sólo en `numpy_referencia.py`.
+- s) CSV para Excel en español: `;`, coma decimal, UTF-8 con BOM.
+- Las semillas del lote son consecutivas (semilla inicial, +1, …); cada réplica cambia también
+  el mundo, porque la semilla de MUNDO es la misma semilla.
+- Feromonas desactivadas por defecto: las corridas de E2 y E3 con la misma semilla no cambian.
+- El giro por feromona es una corrección continua del rumbo, no un evento de la bitácora.
+
+**Pendientes**
+- El aviso de Starlette sobre `httpx2` sigue (sin efecto; cambiar la dependencia requiere aprobación).
+- Sin pruebas automáticas del JavaScript; se verificó con Edge sin interfaz: tabla paso a paso de
+  los 4 métodos, laboratorio, corrida con un congruencial de periodo corto, panel didáctico,
+  descargas CSV, panel de experimentos (incluido el rechazo por presupuesto) y capa de feromonas,
+  sin errores de consola.
+- Posibles extensiones (fuera del alcance acordado): prueba espectral o de series para mostrar
+  por qué RANDU es malo; mantener el mundo fijo entre réplicas variando sólo COMPORTAMIENTO.
+
+**Cómo probarlo manualmente**
+1. `pytest backend/tests -q` → 342 pruebas pasan.
+2. `python backend/scripts/benchmark.py --feromonas` y
+   `python backend/scripts/experimento_lote.py --replicas 5 --pasos 500 --hormigas 500`.
+3. `uvicorn app.main:app --reload --app-dir backend`, abrir <http://127.0.0.1:8000> y recargar con
+   Ctrl+F5 la primera vez.
+4. **Tabla paso a paso**: método "Congruencial lineal" con `a = 5`, `c = 3`, `m = 16` (Avanzados) y
+   semilla 7 → periodo 16 y re-siembra con semilla 6.
+5. **Laboratorio**: "Comparar" con los valores por defecto → cuadrados medios rechaza las tres
+   pruebas; "Descargar informe (CSV)" se abre en Excel.
+6. **★ Simulación demo** → rastros rosa entre el nido y las fuentes; seleccionar una hormiga que
+   busca muestra sus tres sensores y qué decide.
+7. **Descargas**: series, bitácora completa y registro completo (este último re-ejecuta la
+   corrida; el número de filas coincide con "números generados").
+8. **Experimentos**: 10 réplicas de 1 000 pasos → resumen con IC 95 %; "Cancelar" detiene el lote.
+9. Seguir la guía `docs/guia_docente.md`.

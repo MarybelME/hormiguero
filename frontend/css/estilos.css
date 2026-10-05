@@ -20,6 +20,7 @@
   --mundo-fuente: #16a34a;
   --mundo-texto: #1d2330;
   --mundo-seleccion: #dc2626;
+  --mundo-feromona: #db2777;
   /* Colores de cada EstadoHormiga (códigos 0–5) */
   --estado-0: #8b5a2b;
   --estado-1: #1d4ed8;
@@ -51,6 +52,7 @@
     --mundo-fuente: #4ade80;
     --mundo-texto: #e6e9ef;
     --mundo-seleccion: #f87171;
+    --mundo-feromona: #f472b6;
     --estado-0: #c08a52;
     --estado-1: #60a5fa;
     --estado-2: #c084fc;
@@ -396,3 +398,40 @@ button.secundario {
 .tabla-datos th { position: sticky; top: 0; background: var(--panel); }
 .tabla-datos .izquierda { text-align: left; white-space: normal; }
 .tabla-datos tr.degenerado td { background: var(--degenerado); color: var(--degenerado-texto); }
+
+/* --- Parámetros que sólo aplican a otro generador --------------------------------------------- */
+
+.grupo-parametros label.inactivo { opacity: 0.5; }
+
+/* --- Laboratorio de generadores ---------------------------------------------------------------- */
+
+.grupo-casillas {
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+}
+.grupo-casillas div { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; }
+
+.resultados-laboratorio { overflow-x: auto; }
+.tabla-laboratorio th:first-child { text-align: left; white-space: normal; min-width: 12rem; }
+.tabla-laboratorio td { vertical-align: top; text-align: left; white-space: normal; min-width: 11rem; }
+.tabla-laboratorio td.rechaza { background: var(--degenerado); color: var(--degenerado-texto); }
+.tabla-laboratorio td.no-rechaza strong { color: var(--ok); }
+
+.histograma {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 4.5rem;
+  border-bottom: 1px solid var(--borde);
+}
+.histograma .barra { flex: 1; background: var(--acento); min-height: 1px; }
+.histograma .esperada {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--resaltado);
+}
+
+.muestra.feromona { background: var(--mundo-feromona); opacity: 0.6; }

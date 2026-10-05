@@ -33,10 +33,19 @@ export function configurarSimulacion(parametros) {
   });
 }
 
-export function vistaPreviaAleatorios({ semilla, digitos, cantidad }) {
+// solicitud: { generador, semilla, cantidad, digitos, congruencial_a, … }
+export function vistaPreviaAleatorios(solicitud) {
   return pedir("/api/aleatorio/vista-previa", {
     method: "POST",
-    body: JSON.stringify({ generador: "cuadrados_medios", semilla, digitos, cantidad }),
+    body: JSON.stringify(solicitud),
+  });
+}
+
+// solicitud: { generadores: [{ generador, semilla, … }], cantidad, intervalos, alfa }
+export function probarGeneradores(solicitud) {
+  return pedir("/api/aleatorio/pruebas", {
+    method: "POST",
+    body: JSON.stringify(solicitud),
   });
 }
 
@@ -74,4 +83,40 @@ export function obtenerEventos(filtros) {
 
 export function obtenerRegistro(filtros) {
   return pedir(`/api/aleatorio/registro?${consulta(filtros)}`);
+}
+
+// Descarga un CSV generado por el servidor (GET o POST con cuerpo JSON) y lo guarda con el
+// nombre que propone el servidor. Se usa fetch, y no un simple enlace, para mostrar errores.
+export async function descargarCsv(ruta, cuerpo) {
+  const opciones = cuerpo === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo),
+  };
+  const respuesta = await fetch(ruta, opciones);
+  if (!respuesta.ok) {
+    const datos = await respuesta.json().catch(() => null);
+    throw new Error(describirError(respuesta.status, datos));
+  }
+  const disposicion = respuesta.headers.get("Content-Disposition") ?? "";
+  const nombre = /filename="?([^"]+)"?/.exec(disposicion)?.[1] ?? "datos.csv";
+  const url = URL.createObjectURL(await respuesta.blob());
+  const enlace = Object.assign(document.createElement("a"), { href: url, download: nombre });
+  document.body.append(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return nombre;
+}
+
+// --- Lotes de réplicas ---------------------------------------------------------------------
+
+export function iniciarLote(solicitud) {
+  return pedir("/api/experimentos", { method: "POST", body: JSON.stringify(solicitud) });
+}
+
+export function obtenerLote() {
+  return pedir("/api/experimentos");
+}
+
+export function cancelarLote() {
+  return pedir("/api/experimentos/cancelar", { method: "POST" });
 }

@@ -23,7 +23,7 @@ from collections import deque
 from enum import Enum
 from typing import Any
 
-from app.api.protocolo import empaquetar_cuadro
+from app.api.protocolo import empaquetar_cuadro, empaquetar_feromonas
 from app.config import ParametrosSimulacion
 from app.nucleo.simulacion import Simulacion
 
@@ -55,6 +55,7 @@ class Suscripcion:
     def __init__(self) -> None:
         self._mensajes: deque[dict[str, Any]] = deque(maxlen=MENSAJES_PENDIENTES_MAX)
         self._cuadro: bytes | None = None
+        self._feromonas: bytes | None = None  # también sólo el más reciente
         self._hay_algo = asyncio.Event()
         self.seleccion: int | None = None
 
@@ -66,10 +67,17 @@ class Suscripcion:
         self._cuadro = cuadro
         self._hay_algo.set()
 
+    def enviar_feromonas(self, campo: bytes) -> None:
+        self._feromonas = campo
+        self._hay_algo.set()
+
     def pendientes(self) -> list[dict[str, Any] | bytes]:
-        """Saca todo lo que está en espera (JSON primero, luego el último cuadro)."""
+        """Saca todo lo que está en espera (JSON primero, luego feromonas y el último cuadro)."""
         salida: list[dict[str, Any] | bytes] = list(self._mensajes)
         self._mensajes.clear()
+        if self._feromonas is not None:
+            salida.append(self._feromonas)
+            self._feromonas = None
         if self._cuadro is not None:
             salida.append(self._cuadro)
             self._cuadro = None
@@ -129,6 +137,7 @@ class ControladorSimulacion:
             suscripcion.enviar_mensaje(self._mensaje_mundo())
             suscripcion.enviar_mensaje(self._mensaje_estadisticas())
             suscripcion.enviar_cuadro(self._cuadro())
+            self._enviar_feromonas([suscripcion])
         return suscripcion
 
     def desuscribir(self, suscripcion: Suscripcion) -> None:
@@ -160,6 +169,15 @@ class ControladorSimulacion:
     def _cuadro(self) -> bytes:
         s = self.simulacion
         return empaquetar_cuadro(s.tick, s.tiempo, s.mundo)
+
+    def _enviar_feromonas(self, suscripciones) -> None:
+        """Campo de feromonas (binario, tipo 2), con la frecuencia de las estadísticas."""
+        campo = self.simulacion.feromonas
+        if campo is None:
+            return
+        mensaje = empaquetar_feromonas(self.simulacion.tick, campo)
+        for suscripcion in suscripciones:
+            suscripcion.enviar_feromonas(mensaje)
 
     def _mensaje_control(self) -> dict[str, Any]:
         return {"tipo": "control", **self.estado_actual()}
@@ -331,6 +349,7 @@ class ControladorSimulacion:
         if estadisticas:
             self._difundir(self._mensaje_estadisticas())
             self._publicar_selecciones()
+            self._enviar_feromonas(self._suscripciones)
         cuadro = self._cuadro()
         for suscripcion in self._suscripciones:
             suscripcion.enviar_cuadro(cuadro)
